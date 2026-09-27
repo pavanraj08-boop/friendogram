@@ -1,0 +1,4 @@
+/* Trusted runtime layout: 3:2 on desktop, portrait frame on phones. */
+@media (max-width: 640px) {
+  :root { --rf-game-aspect-ratio: 3 / 4; }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Friendogram",
+  "consumable": "Mystery Canvas",
+  "price": "1000000000000000000",
+  "outcomes": [
+    { "name": "Smudge", "chanceBps": 2300, "reward": "0" },
+    { "name": "Pixel Pebble", "chanceBps": 3500, "reward": "500000000000000000" },
+    { "name": "Warm Egg", "chanceBps": 2500, "reward": "1000000000000000000" },
+    { "name": "Gen-1 Crown", "chanceBps": 1000, "reward": "2000000000000000000" },
+    { "name": "Hollow Relic", "chanceBps": 500, "reward": "3500000000000000000" },
+    { "name": "Sparkling Star", "chanceBps": 200, "reward": "5000000000000000000" }
+  ]
+}

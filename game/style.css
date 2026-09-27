@@ -1,0 +1,80 @@
+.fg-game{position:relative;width:100%;height:100%;overflow:hidden;color:#000;background:#fff;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;
+  background-image:radial-gradient(#e6e6e6 1px,transparent 1px);background-size:12px 12px}
+.fg-layout{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px;padding:14px 14px 58px}
+.fg-board{min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;outline:none;border-radius:4px}
+.fg-board:focus-visible{box-shadow:0 0 0 3px #ccff00,0 0 0 5px #000}
+.fg-board svg{width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair}
+.fg-clue{font:bold 6.2px ui-monospace,Menlo,Consolas,monospace;fill:#000}
+.fg-clue.fg-done{fill:#b5b5b5}
+.fg-cell{fill:#fff;stroke:#c8c8c8;stroke-width:.4}
+.fg-cell.fg-on{fill:#000;stroke:#000}
+.fg-cell.fg-flash{fill:#ff3b30;stroke:#ff3b30;transition:fill .2s}
+.fg-cell.fg-solved:not(.fg-on){fill:#ccff00;stroke:#ccff00}
+.fg-x{stroke:#8a8a8a;stroke-width:1;stroke-linecap:round}
+.fg-major{stroke:#000;stroke-width:.6}
+.fg-frame{fill:none;stroke:#000;stroke-width:1.2}
+.fg-cursor{fill:none;stroke:#ccff00;stroke-width:1.4;pointer-events:none;opacity:0}
+.fg-board:focus-visible .fg-cursor{opacity:1;stroke:#5a7a00}
+.fg-side{min-width:0;display:flex;flex-direction:column;gap:9px;overflow:auto;background:#fff;border:2px solid #000;padding:12px}
+.fg-side header{display:flex;flex-direction:column;gap:2px}
+.fg-side h1{margin:0;font-size:20px;letter-spacing:.06em;text-transform:uppercase}
+.fg-balance{margin:0;font-size:11px;background:#ccff00;align-self:flex-start;padding:2px 6px;border:1px solid #000}
+.fg-card{display:flex;gap:10px;align-items:center}
+.fg-card canvas{width:96px;height:96px;flex:none;image-rendering:pixelated;border:2px solid #000;background:#fff}
+.fg-card div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fg-card small{font-size:11px;color:#444}
+.fg-select{display:flex;flex-direction:column;gap:3px;font-size:11px}
+.fg-select select{font:inherit;font-size:12px;padding:6px;border:2px solid #000;background:#fff;color:#000}
+.fg-game button{font:inherit;cursor:pointer;padding:7px 10px;border:2px solid #000;background:#fff;color:#000}
+.fg-game button:disabled{cursor:default;opacity:.45}
+.fg-game button[aria-pressed=true]{background:#000;color:#fff}
+.fg-game button.rf-frame-primary{background:#ccff00;color:#000}
+.fg-tools,.fg-actions,.fg-row{display:flex;flex-wrap:wrap;gap:6px}
+.fg-tools button{flex:1}
+.fg-actions button{flex:1 1 40%}
+.fg-wide{width:100%}
+.fg-status{margin:0;font-size:11px;min-height:1.4em}
+.fg-note{font-size:11px;color:#444}
+.fg-game table{width:100%;text-align:left;border-collapse:collapse;margin:10px 0}
+.fg-game th,.fg-game td{padding:5px 4px;border-bottom:1px solid #ddd}
+.fg-game td small{color:#666}
+.fg-list{list-style:none;margin:6px 0 14px;padding:0}
+.fg-list li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #ddd}
+.fg-list small{color:#555}
+.fg-reward{text-align:center}
+.fg-reward canvas{width:120px;height:120px;image-rendering:pixelated;border:2px solid #000;margin:4px auto 0;display:block}
+.fg-reward .fg-row{justify-content:center}
+.fg-game label{display:block;margin:12px 0}
+.fg-loading{height:100%;display:flex;gap:16px;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font:13px ui-monospace,monospace;background:#fff;color:#000}
+.fg-loading button{font:inherit;padding:8px 12px;border:2px solid #000;background:#fff;cursor:pointer}
+.fg-spinner{width:32px;height:32px;background:#000;animation:fg-spin 1s steps(4) infinite}
+@keyframes fg-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.fg-spinner{animation:none}.fg-cell.fg-flash{transition:none}}
+@media (max-width:620px){
+  .fg-layout{grid-template-columns:minmax(0,1fr) 44%;gap:6px;padding:6px 6px 42px}
+  .fg-side{padding:6px;gap:5px}
+  .fg-side h1{font-size:12px}
+  .fg-card canvas{width:44px;height:44px}
+  .fg-card small{display:none}
+  .fg-select select{padding:3px;font-size:10px}
+  .fg-game{font-size:10px}
+  .fg-game button{padding:4px 6px}
+}
+@media (max-aspect-ratio: 1/1){
+  .fg-layout{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto;padding:6px 6px 44px;gap:6px}
+  .fg-side{overflow:visible;padding:6px;gap:5px}
+  .fg-side header{flex-direction:row;align-items:center;justify-content:space-between}
+  .fg-card small{display:block}
+  .fg-card small:nth-of-type(1){display:none}
+  .fg-card canvas{width:40px;height:40px}
+  .fg-actions button{flex:1 1 20%}
+}
+@media (max-aspect-ratio: 1/1){
+  .fg-side{gap:4px;border-width:1px}
+  .fg-side h1{font-size:13px}
+  .fg-select{flex-direction:row;align-items:center;gap:6px}
+  .fg-select select{flex:1}
+  .fg-game button{padding:4px 6px;font-size:11px}
+  .fg-card{gap:6px}.fg-card canvas{width:32px;height:32px}.fg-card strong{font-size:11px}
+  .fg-status:empty{display:none}
+}
