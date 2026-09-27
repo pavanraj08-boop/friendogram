@@ -44,7 +44,7 @@ await testGame("./games/friendogram", {
     ok("Clear empties the grid", (await cells()).every(v => v === 0) && await marks() === 0);
 
     // 4. Timer runs.
-    const t1 = (await status()).match(/(\d+):(\d+)/)[0]; await page.waitForTimeout(2200); const t2 = (await status()).match(/(\d+):(\d+)/)[0];
+    const t1 = (await status()).match(/(\d+:\d+) · \d+ mistake/)[1]; await page.waitForTimeout(2200); const t2 = (await status()).match(/(\d+:\d+) · \d+ mistake/)[1];
     ok("solve timer advances", t1 !== t2, `${t1}→${t2}`);
 
     // 5. Runtime pause: open Friend wallet menu, try to paint, nothing changes.

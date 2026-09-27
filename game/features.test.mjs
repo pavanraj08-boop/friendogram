@@ -55,7 +55,8 @@ await testGame("./games/friendogram", {
     await game.getByRole("button", { name: /Gallery/ }).click();
     const share = await game.locator(".fg-share").innerText();
     ok("gallery shows daily result card", /Friendogram ☀ #\d+/.test(share) && /solved in/.test(share), share.replace(/\n/g, " | "));
-    ok("gallery shows burn total", await game.getByRole("heading", { name: /Burn · 0.2 RF/ }).isVisible());
+    const ledgerText = await game.locator(".fg-ledger").innerText();
+    ok("gallery ledger shows lens burn and total removed", /Lens burn[^\n]*\t?\s*0\.2 RF/.test(ledgerText) && /RF removed from supply\s*🔥 [\d.]+ RF/.test(ledgerText), ledgerText.replace(/\s+/g, " ").slice(0, 160));
     ok("gallery lists all 9 family perks", (await game.locator(".fg-list li").filter({ hasText: /Bare Bones|Second Face|Kinship|Mitosis|Tilt|Float|Titan|Shine|Void Sight/ }).count()) === 9);
     await page.screenshot({ path: "./artifacts/features-gallery.png" });
     await game.getByRole("button", { name: "Close Gallery" }).click();

@@ -13,7 +13,7 @@ npm ci
 npm run dev:friendogram        # same as: npm run dev:game -- games/friendogram
 ```
 
-Checks (typecheck, SDK validation, mock-wallet browser run at 960 px and 360 px):
+Checks (typecheck, SDK validation, solver proof, mock-wallet browser runs):
 
 ```sh
 npm install -D playwright && npx playwright install chromium   # once
@@ -69,6 +69,20 @@ choose an owned hardwired Generations Friend (generation ≥ 1) and play.
   lenses) to screenshot and share. The artwork is the Friend's canonical on-chain frame,
   read once and embedded, so the game never reads other token IDs at runtime.
 - Settings: sound on/off (muted by default), reduce motion, Assist.
+
+- **No guessing, ever:** a built-in line solver checks every puzzle when it loads (your
+  Friend's sprite, relics, daily Friends). If pure row/column logic would stall, it places the
+  fewest locked **anchor** cells (dotted) needed to finish by logic. The two rarest relics need 2
+  anchors each; `solver.test.mjs` also proves 200 random pictures come out uniquely solvable.
+- **Difficulty and par:** each puzzle is rated ★–★★★★ from how many logic sweeps it takes,
+  with a par time of 45 s + 45 s per star.
+- **Stamps (cosmetic, no RF value):** ◆ Perfect (no mistakes, no lenses), ∴ Pure logic
+  (Assist off throughout), » Swift (under par with ≤ 2 mistakes). Shown on the solve card,
+  canvas reveals, the daily result card and the Gallery.
+- **Solve celebration:** your Friend walks across a card with time, stars and stamps, plus
+  *Next puzzle*. It stays still with reduced motion.
+- **Session economy ledger (Gallery):** canvases bought, the live-play 50% burn / 50%
+  rewards split, lens burn, relics sold back, and total RF removed from supply.
 
 ## Economy (simulated)
 

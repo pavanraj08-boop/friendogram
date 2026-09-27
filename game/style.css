@@ -86,3 +86,22 @@
 .fg-list li.fg-mine{background:#f6ffd6}
 .fg-list li small{text-align:right}
 @media (max-aspect-ratio: 1/1){.fg-perk{font-size:9.5px;padding:3px 5px}.fg-perk strong{display:inline}.fg-burn{display:none}}
+.fg-cell.fg-given{fill:#000}
+.fg-anchor{fill:#ccff00;pointer-events:none}
+.fg-stars{letter-spacing:.08em}
+.fg-lede{font-size:14px}
+.fg-steps{padding-left:20px;margin:8px 0}.fg-steps li{margin:6px 0}
+.fg-dot{display:inline-block;background:#000;color:#ccff00;padding:0 4px}
+.fg-ledger{font-size:12px}.fg-ledger td:last-child{text-align:right;white-space:nowrap}.fg-ledger .fg-total td{font-weight:bold;border-top:2px solid #000}
+.fg-board{grid-area:1/1}.fg-celebrate{grid-area:1/1;position:relative;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.72);z-index:5}
+.fg-celebrate-card{background:#fff;border:3px solid #000;box-shadow:6px 6px 0 #ccff00;padding:16px 20px;text-align:center;max-width:360px;overflow:hidden}
+.fg-celebrate-card h2{margin:6px 0;font-size:20px;text-transform:uppercase;letter-spacing:.05em}
+.fg-celebrate-card p{margin:6px 0}
+.fg-celebrate-card .fg-row{justify-content:center;margin-top:10px}
+.fg-stamps{font-weight:bold;background:#ccff00;display:inline-block;padding:2px 8px;border:1px solid #000}
+.fg-walk{height:84px;position:relative}
+.fg-walk canvas{width:80px;height:80px;image-rendering:pixelated}
+.fg-walking canvas{position:absolute;left:0;animation:fg-stroll 3.2s linear infinite}
+@keyframes fg-stroll{from{transform:translateX(-90px)}to{transform:translateX(330px)}}
+@media (prefers-reduced-motion:reduce){.fg-walking canvas{animation:none;position:static}}
+@media (max-aspect-ratio:1/1){.fg-celebrate-card{padding:8px 10px}.fg-celebrate-card h2{font-size:14px}.fg-walk{height:44px}.fg-walk canvas{width:40px;height:40px}}
