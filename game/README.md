@@ -20,6 +20,10 @@ npm install -D playwright && npx playwright install chromium   # once
 npm run check:friendogram
 ```
 
+Browser checks: `browser.test.mjs` (desktop/phone smoke + solve), `deep.test.mjs`
+(controls, pause, all six relic tiers, selling, limits), `features.test.mjs` (perks,
+lenses and burn, Friend of the Day).
+
 ![Solved portrait](screenshot.png)
 
 Open `http://localhost:4173`, connect a wallet on Robinhood mainnet (4663),
@@ -40,6 +44,30 @@ choose an owned hardwired Generations Friend (generation ≥ 1) and play.
 - **Mystery Canvas (simulated):** buy in *Canvases*, then open one. Its relic is fixed
   by the SDK's chance client **when opened**. Solving only reveals it, and
   *Reveal now* skips the puzzle. Keep the relic or sell it for its fixed RF value.
+- **Family perks:** your Friend's real on-chain family changes the rules, and rarer
+  families (2.5% of designs) get stronger perks:
+
+  | Family | Share | Perk |
+  | --- | --- | --- |
+  | Skeleton | 18% | Bare Bones: first 3 wrong fills per puzzle don't count |
+  | Mask | 18% | Second Face: first lens per puzzle is free |
+  | Family | 18% | Kinship: each solved puzzle banks 1 free lens |
+  | Cellular | 18% | Mitosis: lenses cost half |
+  | Asymmetry | 18% | Tilt: first column starts solved |
+  | Hoverer | 2.5% | Float: timer runs at half speed + first lens free |
+  | Colossus | 2.5% | Titan: first row and column start solved |
+  | Sparkling | 2.5% | Shine: 3 free lenses per puzzle |
+  | Hollow | 2.5% | Void Sight: empty lines pre-marked, mistakes never count |
+
+- **Lenses (RF burn):** reveal the row or column under the cursor (buttons, or L / K).
+  Free and banked lenses are used first; after that a lens costs **0.1 RF, 100% burned**
+  (0.05 RF for Cellular). The HUD shows total RF burned. Burned RF reduces the spendable
+  balance used for canvas purchases. Solving an already-solved line is refused at no cost.
+- **☀ Friend of the Day:** every player gets the same Rare Friend each UTC day, cycling
+  through 18 hand-picked hardwired Friends (two per family). It stays anonymous until
+  solved, then the Gallery shows a result card (puzzle number, Friend, time, mistakes,
+  lenses) to screenshot and share. The artwork is the Friend's canonical on-chain frame,
+  read once and embedded, so the game never reads other token IDs at runtime.
 - Settings: sound on/off (muted by default), reduce motion, Assist.
 
 ## Economy (simulated)
@@ -58,7 +86,13 @@ choose an owned hardwired Generations Friend (generation ≥ 1) and play.
 | Consumable | One canvas produces exactly one relic; no reroll |
 | Redemption | Fixed value, no expiry, to the Friend's canonical wallet |
 
-Skill never changes payouts; puzzles are presentation for an already-settled outcome.
+Skill, perks and lenses never change canvas payouts; puzzles are presentation for an
+already-settled outcome.
+
+Lens burns are tracked by the game itself: the SDK v0.1.2 bridge has no generic
+spend/burn action, so the burn total is simulated and subtracted from the spendable
+balance shown in-game. Intended live integration: a lens burns 0.1 RF from the Friend's
+canonical wallet (100% burn, no reward share).
 Intended live integration: canvas payments follow Rare Friends gameplay rules
 (50% burned, 50% to Friend rewards). All balances, relics and sales here are
 simulated. No transactions are sent.
@@ -70,4 +104,5 @@ simulated. No transactions are sent.
 - Wallet, Friend selection and the ownership gate are the SDK runtime's.
 - Progress is session-only (the SDK supplies no persistence).
 - Relic artwork is original 16 × 16 pixel art made for this game.
-- Future work: hint purchases burning RF, daily shared puzzle, leaderboard (needs persistence).
+- Future work: on-chain lens burns, a shared daily leaderboard (needs persistence),
+  a Puzzle Maker where players' drawings become canvases with creator fees.

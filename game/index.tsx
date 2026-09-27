@@ -4,19 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import type { GameComponentProps } from "@rarefriends/friendsdk/runtime";
 import { GameMenu } from "@rarefriends/friendsdk/frame";
 import { formatGameAmount } from "@rarefriends/friendsdk/ui";
-import { expectedReward, maximumPrize, type GameSnapshot } from "@rarefriends/friendsdk/game";
+import { expectedReward, maximumPrize, RF as RF_UNIT, type GameSnapshot } from "@rarefriends/friendsdk/game";
 import { createFriendReader, spriteFrame, type GenerationSprites, type SpriteFacing } from "@rarefriends/friendsdk/sprites";
 import { createFriendSoundKit, type FriendSoundKit, type FriendSoundCue } from "@rarefriends/friendsdk/sounds";
 import { SIZE, clues, emptyGrid, isSolved, lineSatisfied, pictureRows, type Cell, type Picture } from "./nonogram";
 import { RELICS } from "./relics";
+import { perkFor, PERKS, type Perk } from "./perks";
+import { dailyFor } from "./daily";
 import "@rarefriends/friendsdk/frame.css";
 import "./style.css";
 
 type Puzzle = Readonly<{
-  id: string; kind: "portrait" | "canvas"; title: string; picture: Picture;
+  id: string; kind: "portrait" | "canvas" | "daily"; title: string; picture: Picture; tokenId?: bigint; family?: string;
   facing?: SpriteFacing; walking?: boolean; playId?: bigint; outcomeId?: number;
 }>;
-type Progress = { grid: Cell[]; mistakes: number; seconds: number; solved: boolean; revealed: boolean };
+type Progress = { grid: Cell[]; mistakes: number; seconds: number; solved: boolean; revealed: boolean; lenses: number; freeLeft: number; forgiven: number };
 type Menu = "help" | "shop" | "gallery" | "settings" | "reward" | null;
 type Tool = "fill" | "mark";
 
@@ -33,6 +35,24 @@ const FAMILY_SHARE: Record<string, string> = {
   Skeleton: "18%", Mask: "18%", Family: "18%", Cellular: "18%", Asymmetry: "18%",
   Hoverer: "2.5%", Colossus: "2.5%", Sparkling: "2.5%", Hollow: "2.5%",
 };
+const LENS_PRICE = RF_UNIT / 10n; // 0.1 RF per lens, 100% burned (simulated)
+const DAILY = dailyFor();
+
+/** A fresh board with the family perk's head start applied. */
+function newProgress(picture: Picture, perk: Perk): Progress {
+  const solution = pictureRows(picture), grid = emptyGrid();
+  const put = (x: number, y: number) => { grid[y * SIZE + x] = solution[y][x] ? 1 : 2; };
+  for (const reveal of perk.reveal) {
+    if (reveal === "row0") for (let x = 0; x < SIZE; x++) put(x, 0);
+    if (reveal === "col0") for (let y = 0; y < SIZE; y++) put(0, y);
+    if (reveal === "empty-lines") for (let i = 0; i < SIZE; i++) {
+      if (!solution[i].some(Boolean)) for (let x = 0; x < SIZE; x++) put(x, i);
+      if (!solution.some(row => row[i])) for (let y = 0; y < SIZE; y++) put(i, y);
+    }
+  }
+  return { grid, mistakes: 0, seconds: 0, solved: false, revealed: false, lenses: 0, freeLeft: perk.freeLenses, forgiven: 0 };
+}
+
 const revealCue = (outcomeId: number): FriendSoundCue => outcomeId >= 5 ? "reveal-legendary" : outcomeId >= 4 ? "reveal-rare" : "reveal-common";
 
 function portraitPuzzles(sprites: GenerationSprites): Puzzle[] {
@@ -60,6 +80,10 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
   const [menu, setMenu] = useState<Menu>("help"), [rewardId, setRewardId] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [muted, setMuted] = useState(true), [reducedMotion, setReducedMotion] = useState(false);
+  const [burned, setBurned] = useState(0n), [bank, setBank] = useState(0);
+  const perk = perkFor(sprites?.familyName ?? "");
+  const perkRef = useRef(perk); perkRef.current = perk;
+  const slowTick = useRef(false);
   const sound = useRef<FriendSoundKit | null>(null), locked = useRef(false), epoch = useRef(0);
   const drag = useRef<{ value: Cell; pointer: number } | null>(null);
   const preview = useRef<HTMLCanvasElement>(null), board = useRef<SVGSVGElement>(null);
@@ -69,13 +93,17 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     const version = ++epoch.current;
     sound.current = createFriendSoundKit({ muted: true });
     setSprites(null); setSnapshot(null); setLoadError(""); setPuzzles([]); setProgress({}); setActiveId("");
-    setMenu("help"); setBusy(false); setError(""); setMessage(""); setMuted(true); locked.current = false;
+    setMenu("help"); setBusy(false); setError(""); setMessage(""); setMuted(true); setBurned(0n); setBank(0); locked.current = false;
     void Promise.all([createFriendReader().read(friendId), client.read()]).then(([art, value]) => {
       if (version !== epoch.current) return;
       if (value.friendId !== friendId) throw new Error("This game session does not match the selected Friend.");
       const list = portraitPuzzles(art);
-      setSprites(art); setSnapshot(value); setPuzzles(list); setActiveId(list[0]?.id ?? "");
-      setProgress(Object.fromEntries(list.map(p => [p.id, { grid: emptyGrid(), mistakes: 0, seconds: 0, solved: false, revealed: false }])));
+      setSprites(art); setSnapshot(value); setActiveId(list[0]?.id ?? "");
+      const familyPerk = perkFor(art.familyName);
+      // Friend of the Day: embedded canonical artwork, identical for every player today.
+      const daily: Puzzle = { id: "daily", kind: "daily", title: `Friend of the Day #${DAILY.number}`, picture: DAILY.picture, tokenId: DAILY.tokenId, family: DAILY.family };
+      setPuzzles([...list, daily]);
+      setProgress(Object.fromEntries([...list, daily].map(p => [p.id, newProgress(p.picture, familyPerk)])));
     }).catch(cause => { if (version === epoch.current) setLoadError(cause instanceof Error ? cause.message : "Could not load your Friend."); });
     return () => { epoch.current++; sound.current?.dispose(); sound.current = null; };
   }, [client, friendId, revision]);
@@ -97,6 +125,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     const timer = window.setInterval(() => {
       if (document.hidden || paused) return;
       if (menu !== null || !active) return;
+      if (perkRef.current.slowTimer) { slowTick.current = !slowTick.current; if (slowTick.current) return; }
       setProgress(all => {
         const current = all[active.id];
         return current && !current.solved ? { ...all, [active.id]: { ...current, seconds: current.seconds + 1 } } : all;
@@ -112,10 +141,12 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
   }, [reducedMotion, paused]);
 
   const solve = useCallback((puzzle: Puzzle, revealed: boolean) => {
+    if (!revealed && perkRef.current.bankOnSolve) setBank(b => b + perkRef.current.bankOnSolve);
     setProgress(all => ({ ...all, [puzzle.id]: { ...all[puzzle.id], solved: true, revealed, grid: pictureRows(puzzle.picture).flat().map(on => (on ? 1 : 2) as Cell) } }));
     if (puzzle.kind === "canvas" && puzzle.outcomeId) {
       sound.current?.play(revealCue(puzzle.outcomeId)); setMessage(""); setError(""); setRewardId(puzzle.id); setMenu("reward");
-    } else { sound.current?.play("reveal-rare"); setMessage(`Solved! That's ${sprites ? `your ${sprites.familyName}` : "your Friend"}.`); }
+    } else if (puzzle.kind === "daily") { sound.current?.play("reveal-legendary"); setMessage(`Friend of the Day solved! #${puzzle.tokenId} is a ${puzzle.family}. Result card in Gallery.`); }
+    else { sound.current?.play("reveal-rare"); setMessage(`Solved! That's ${sprites ? `your ${sprites.familyName}` : "your Friend"}.`); }
   }, [sprites]);
 
   const progressRef = useRef(progress); progressRef.current = progress;
@@ -127,13 +158,39 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     let next: Cell = value, mistake = false;
     if (assist && value === 1 && !solution[index]) { next = 2; mistake = true; }
     const grid = state.grid.slice(); grid[index] = next;
-    const updated = { ...state, grid, mistakes: state.mistakes + (mistake ? 1 : 0) };
+    const forgiven = mistake && state.forgiven < perkRef.current.forgive;
+    const updated = { ...state, grid, mistakes: state.mistakes + (mistake && !forgiven ? 1 : 0), forgiven: state.forgiven + (forgiven ? 1 : 0) };
     progressRef.current = { ...progressRef.current, [active.id]: updated };
     setProgress(all => ({ ...all, [active.id]: { ...updated, seconds: all[active.id]?.seconds ?? updated.seconds } }));
     if (mistake) { setFlash(index); window.setTimeout(() => setFlash(f => (f === index ? -1 : f)), 450); sound.current?.play("impact"); }
     else if (value === 1) sound.current?.play("select");
     if (!mistake && isSolved(grid, active.picture)) solve(active, false);
   }, [active, blocked, assist, solution, solve]);
+
+  /** Lens: reveal the cursor's row or column. Free lenses are used first, then banked ones, then RF (burned). */
+  const lensCost = (LENS_PRICE * BigInt(perk.lensCostPct)) / 100n;
+  const applyLens = (axis: "row" | "col") => {
+    const state = active ? progressRef.current[active.id] : undefined;
+    if (!active || !state || state.solved || paused || busy || !snapshot) return;
+    const x = cursor % SIZE, y = Math.floor(cursor / SIZE), rows = pictureRows(active.picture);
+    const cells: [number, number][] = Array.from({ length: SIZE }, (_, i) => (axis === "row" ? [i, y] : [x, i]));
+    if (cells.every(([cx, cy]) => state.grid[cy * SIZE + cx] === (rows[cy][cx] ? 1 : 2))) { setMessage(`That ${axis === "row" ? "row" : "column"} is already solved. Move the cursor to another line.`); return; }
+    let paid: "free" | "bank" | "rf" = "free";
+    if (state.freeLeft > 0) paid = "free";
+    else if (bank > 0) paid = "bank";
+    else if (snapshot.rfBalance - burned >= lensCost) paid = "rf";
+    else { setError("Not enough RF for a lens."); return; }
+    const grid = state.grid.slice();
+    for (const [cx, cy] of cells) grid[cy * SIZE + cx] = rows[cy][cx] ? 1 : 2;
+    const updated = { ...state, grid, lenses: state.lenses + 1, freeLeft: state.freeLeft - (paid === "free" ? 1 : 0) };
+    progressRef.current = { ...progressRef.current, [active.id]: updated };
+    setProgress(all => ({ ...all, [active.id]: { ...updated, seconds: all[active.id]?.seconds ?? updated.seconds } }));
+    if (paid === "bank") setBank(b => b - 1);
+    if (paid === "rf") setBurned(b => b + lensCost);
+    setError(""); setMessage(paid === "rf" ? `Lens used: ${rf(lensCost)} burned (simulated).` : paid === "bank" ? "Lens used from your Kinship bank." : `Free ${perk.name} lens used.`);
+    sound.current?.play("action-ready");
+    if (isSolved(grid, active.picture)) solve(active, false);
+  };
 
   // Pointer painting: the first cell decides fill/erase or mark/unmark for the whole drag.
   const cellAt = (event: PointerEvent<SVGSVGElement>) => {
@@ -177,6 +234,8 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     else if (key === "f" || key === "z") { event.preventDefault(); setCell(cursor, current === 1 ? 0 : 1); }
     else if (key === "x") { event.preventDefault(); setCell(cursor, current === 2 ? 0 : 2); }
     else if (key === "t") { event.preventDefault(); setTool(t => (t === "fill" ? "mark" : "fill")); }
+    else if (key === "l") { event.preventDefault(); applyLens("row"); }
+    else if (key === "k") { event.preventDefault(); applyLens("col"); }
   };
 
   // Friend preview: live sprite animation once a portrait is solved, otherwise the player's progress.
@@ -204,7 +263,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     const id = `canvas-${playId}`;
     const puzzle: Puzzle = { id, kind: "canvas", title: `Mystery Canvas #${playId}`, picture: RELICS[outcomeId - 1].picture, playId, outcomeId };
     setPuzzles(list => (list.some(p => p.id === id) ? list : [...list, puzzle]));
-    setProgress(all => (all[id] ? all : { ...all, [id]: { grid: emptyGrid(), mistakes: 0, seconds: 0, solved: false, revealed: false } }));
+    setProgress(all => (all[id] ? all : { ...all, [id]: newProgress(puzzle.picture, perkRef.current) }));
     setActiveId(id); setMenu(null);
   };
   const paintCanvas = () => act(async () => {
@@ -223,7 +282,8 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
   if (!snapshot || !sprites || !active || !state || !clue) return <div className="fg-loading" role="status"><div className="fg-spinner" aria-hidden="true" />Reading your Friend's pixels from the chain…</div>;
 
   const price = definition.price, maxPrize = maximumPrize(definition);
-  const canBuy = snapshot.rfBalance >= price && snapshot.freeStake >= maxPrize && snapshot.freeStake + price >= maxPrize;
+  const spendable = snapshot.rfBalance - burned;
+  const canBuy = spendable >= price && snapshot.freeStake >= maxPrize && snapshot.freeStake + price >= maxPrize;
   const pending = snapshot.plays.find(play => play.outcomeId === null);
   const modeLabel = snapshot.mode === "preview" ? "Simulated" : "Live";
   const portraits = puzzles.filter(p => p.kind === "portrait");
@@ -260,24 +320,31 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
         </svg>
       </div>
       <aside className="fg-side">
-        <header><h1>Friendogram</h1><p className="fg-balance">{modeLabel} · {rf(snapshot.rfBalance)} · {snapshot.consumables.toString()} canvas</p></header>
+        <header><h1>Friendogram</h1><p className="fg-balance">{modeLabel} · {rf(spendable)} · {snapshot.consumables.toString()} canvas</p>
+          <p className="fg-burn" aria-label={`${rf(burned)} burned on lenses`}>🔥 {rf(burned)} burned</p></header>
+        <p className="fg-perk" title={perk.text}><strong>{perk.family} perk · {perk.name}</strong> {perk.text}</p>
         <div className="fg-card">
           <canvas ref={preview} width={96} height={96} aria-label={state.solved ? `${active.title} solved` : "Your progress"} />
           <div>
             <strong>{hiddenName ? `${active.title} · sealed` : active.title}</strong>
-            <small>{active.kind === "portrait" ? `#${friendId} · ${sprites.familyName} family (${FAMILY_SHARE[sprites.familyName]} of designs)` : state.solved && active.outcomeId ? `${definition.outcomes[active.outcomeId - 1].name} · ${RELICS[active.outcomeId - 1].rarity}` : "Prize fixed at opening. Solve to reveal it."}</small>
+            <small>{active.kind === "daily" ? `${DAILY.key} · #${active.tokenId} · ${state.solved ? `${active.family} family` : "who is it?"}` : active.kind === "portrait" ? `#${friendId} · ${sprites.familyName} family (${FAMILY_SHARE[sprites.familyName]} of designs)` : state.solved && active.outcomeId ? `${definition.outcomes[active.outcomeId - 1].name} · ${RELICS[active.outcomeId - 1].rarity}` : "Prize fixed at opening. Solve to reveal it."}</small>
             <small>{state.solved ? (state.revealed ? "Revealed" : `Solved in ${clock(state.seconds)} · ${state.mistakes} mistake${state.mistakes === 1 ? "" : "s"}`) : `${clock(state.seconds)} · ${state.mistakes} mistake${state.mistakes === 1 ? "" : "s"}`}</small>
           </div>
         </div>
         <label className="fg-select">Puzzle
           <select value={active.id} onChange={event => { setActiveId(event.target.value); setCursor(0); setMessage(""); }}>
-            {puzzles.map(p => <option key={p.id} value={p.id}>{progress[p.id]?.solved ? "✓ " : ""}{p.kind === "canvas" && !progress[p.id]?.solved ? `${p.title} · sealed` : p.title}</option>)}
+            {puzzles.map(p => <option key={p.id} value={p.id}>{progress[p.id]?.solved ? "✓ " : ""}{p.kind === "canvas" && !progress[p.id]?.solved ? `${p.title} · sealed` : p.kind === "daily" ? `☀ ${p.title}` : p.title}</option>)}
           </select>
         </label>
         <div className="fg-tools" role="group" aria-label="Tool">
           <button type="button" aria-pressed={tool === "fill"} onClick={() => setTool("fill")}>■ Fill</button>
           <button type="button" aria-pressed={tool === "mark"} onClick={() => setTool("mark")}>✕ Mark</button>
           <button type="button" disabled={state.solved} onClick={() => setProgress(all => ({ ...all, [active.id]: { ...state, grid: emptyGrid() } }))}>Clear</button>
+        </div>
+        <div className="fg-tools" role="group" aria-label="Lenses">
+          <button type="button" disabled={state.solved} onClick={() => applyLens("row")} title="Reveal the cursor's row (L)">🔍 Row</button>
+          <button type="button" disabled={state.solved} onClick={() => applyLens("col")} title="Reveal the cursor's column (K)">🔍 Column</button>
+          <span className="fg-lens-note">{state.freeLeft > 0 ? `${state.freeLeft} free` : bank > 0 ? `${bank} banked` : rf(lensCost)}</span>
         </div>
         {active.kind === "canvas" && !state.solved && <button type="button" className="fg-wide" onClick={() => solve(active, true)}>Reveal now (skip puzzle)</button>}
         <div className="fg-actions">
@@ -297,18 +364,21 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
         <p>Every puzzle here is drawn from <strong>#{friendId.toString()}</strong>'s own 16 × 16 on-chain sprite. Solve it and your Friend walks off the board.</p>
         <p>Numbers are runs of filled squares in that row or column, in order, with at least one gap between runs. Fill squares, mark ones you know are empty, and grey clues mean a line is done.</p>
         <p><strong>Controls:</strong> tap or drag to paint · right-click or ✕ Mark to mark · keyboard: arrows/WASD move, Space fills with the current tool, F fills, X marks, T switches tool.</p>
+        <p><strong>Your family perk:</strong> #{friendId.toString()} is a {perk.family} ({perk.share} of designs), so you get <strong>{perk.name}</strong>: {perk.text} Rarer families get stronger perks.</p>
+        <p><strong>Lenses</strong> reveal the row or column under the cursor (buttons, or L / K). Free and banked lenses are used first. After that each lens costs {rf(lensCost)}, and <strong>100% of it is burned</strong> (simulated).</p>
+        <p><strong>☀ Friend of the Day #{DAILY.number}:</strong> every player gets the same Rare Friend today. Solve it to find out who it is.</p>
         <p><strong>Mystery Canvas</strong> ({rf(price)}, simulated): its relic is fixed when you open it. Solve the picture to reveal it, then keep it or sell it back for its fixed RF value.</p>
       </> : menu === "shop" ? <>
         <div className="fg-row">
           <button type="button" disabled={!canBuy || busy || paused} onClick={() => void act(() => client.buy(1n), "purchase")}>Buy 1 · {rf(price)}</button>
-          <button type="button" disabled={!canBuy || busy || paused || snapshot.rfBalance < price * 3n} onClick={() => void act(() => client.buy(3n), "purchase")}>Buy 3 · {rf(price * 3n)}</button>
+          <button type="button" disabled={!canBuy || busy || paused || spendable < price * 3n} onClick={() => void act(() => client.buy(3n), "purchase")}>Buy 3 · {rf(price * 3n)}</button>
           <button type="button" className="rf-frame-primary" disabled={busy || paused || (!pending && snapshot.consumables === 0n)} onClick={() => void paintCanvas()}>{pending ? "Resume canvas" : `Open a canvas (${snapshot.consumables.toString()})`}</button>
         </div>
         <p>One canvas costs <strong>{rf(price)}</strong> and holds one relic. The prize is fixed when you open it; solving only reveals it. {snapshot.mode === "preview" && "All RF here is simulated."}</p>
         <table><thead><tr><th>Relic</th><th>Chance</th><th>Value</th></tr></thead>
           <tbody>{definition.outcomes.map((o, i) => <tr key={o.name}><td>{o.name} <small>{RELICS[i].rarity}</small></td><td>{o.chanceBps / 100}%</td><td>{rf(o.reward)}</td></tr>)}</tbody></table>
         <p className="fg-note">Expected value {rf(expectedReward(definition))} per canvas · max {rf(maxPrize)}. In live play, half of each payment is burned and half funds Friend rewards, as with other Rare Friends gameplay.</p>
-        {!canBuy && <p>{snapshot.rfBalance < price ? "Not enough RF." : "New canvases are paused until there's enough free backing."}</p>}
+        {!canBuy && <p>{spendable < price ? "Not enough RF." : "New canvases are paused until there's enough free backing."}</p>}
         {feedback && <p role={error ? "alert" : "status"}>{feedback}</p>}
       </> : menu === "reward" && reward && rewardOutcome && reward.outcomeId ? <div className="fg-reward">
         <canvas width={96} height={96} ref={node => {
@@ -328,9 +398,18 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
       </div> : menu === "gallery" ? <>
         <h3>#{friendId.toString()} · {sprites.familyName}</h3>
         <ul className="fg-list">{portraits.map(p => { const s = progress[p.id]; return <li key={p.id}><span>{s?.solved ? "✓" : "·"} {p.title}</span><small>{s?.solved ? `${clock(s.seconds)} · ${s.mistakes} mistakes` : "unsolved"}</small></li>; })}</ul>
+        {(() => { const d = puzzles.find(p => p.kind === "daily"), s = d && progress[d.id]; return <>
+          <h3>☀ Friend of the Day #{DAILY.number} · {DAILY.key}</h3>
+          {d && s?.solved ? <pre className="fg-share">{`Friendogram ☀ #${DAILY.number}\nFriend #${d.tokenId} (${d.family})\n${s.revealed ? "revealed" : `solved in ${clock(s.seconds)}`} · ${s.mistakes} mistakes · ${s.lenses} lenses`}</pre>
+            : <p>Not solved yet. Pick ☀ Friend of the Day in the puzzle list.</p>}
+        </>; })()}
+        <h3>Burn · {rf(burned)}</h3>
+        <p className="fg-note">{Object.values(progress).reduce((n, s) => n + s.lenses, 0)} lenses used this session{bank ? ` · ${bank} banked` : ""}. Lens burns are simulated and tracked by the game.</p>
         <h3>Relics · {heldCount.toString()} held</h3>
         <ul className="fg-list">{definition.outcomes.map((o, i) => <li key={o.name}><span><strong>{o.name}</strong> <small>{snapshot.inventory[i].toString()} held · {rf(o.reward)}</small></span>
           <button type="button" disabled={busy || paused || snapshot.inventory[i] === 0n || o.reward === 0n} onClick={() => void act(() => client.redeem(i + 1, 1n), "reward")}>Sell one</button></li>)}</ul>
+        <h3>Family perks</h3>
+        <ul className="fg-list">{Object.values(PERKS).map(p => <li key={p.family} className={p.family === perk.family ? "fg-mine" : undefined}><span><strong>{p.family}</strong> <small>{p.share}</small></span><small>{p.name}: {p.text}</small></li>)}</ul>
         {feedback && <p role={error ? "alert" : "status"}>{feedback}</p>}
       </> : menu === "settings" ? <>
         <button type="button" aria-pressed={!muted} onClick={() => { const next = !muted; setMuted(next); sound.current?.setMuted(next); if (!next) void sound.current?.unlock(); }}>{muted ? "Sound off" : "Sound on"}</button>
