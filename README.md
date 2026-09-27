@@ -2,7 +2,7 @@
 
 Picross (nonogram) puzzles drawn from **your own Rare Friend's 16 × 16 on-chain sprite**. Solve the grid and your Friend walks off the board.
 
-Rare Friends Vibeathon entry · FriendSDK **v0.1.2** · Builder: Pavan Raj R.
+Rare Friends Vibeathon entry · **Economy Potential** (also Character Spotlight) · FriendSDK **v0.1.2** · Builder: Pavan Raj R.
 
 **Play:** https://pavanraj08-boop.github.io/friendogram/ (needs a browser wallet on Robinhood mainnet, chain 4663, holding a hardwired Generations NFT, generation 1 or higher; all RF is simulated)
 
@@ -18,6 +18,8 @@ Rare Friends Vibeathon entry · FriendSDK **v0.1.2** · Builder: Pavan Raj R.
 - **Mystery Canvas (1 RF):** a chance-backed relic (6 tiers, 0.90 RF expected value) you reveal by solving it, then keep or sell.
 - **Stamps and a celebration:** ◆ Perfect, ∴ Pure logic, » Swift; your Friend walks across the solve card.
 - **☀ Daily tasks, streaks and the Daily Pot:** five daily tasks pay Ink and points. Points × streak weight (up to ×3 at 30 days) share a pot funded by the canvas edge (60% pot / 20% burn / 20% developer). Claims are capped below the edge, so no play pattern returns 100% or more; missing a day halves the streak. Daily players earn 2.2× the bonus per RF of casual players. Analysis: [game/economy/README.md](game/economy/README.md).
+- **Featured Friend royalty:** the day's ☀ Friend of the Day earns 10% of the pot into its own wallet (≈ 7.8 RF/day at 1,500 players).
+- **Generation bonus and Happiness:** your Friend's generation is read from the chain (Gen 1 +50% Ink … Gen 6 +0%, Ink only); daily tasks add simulated ♥ Happiness.
 - **Session economy ledger** in the Gallery: canvas spend, edge split, lens burn, relic sales, pot claims and total RF removed from supply.
 
 ![Daily tasks](game/screenshot-daily.png)
