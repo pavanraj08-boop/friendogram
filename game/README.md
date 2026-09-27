@@ -13,7 +13,7 @@ npm ci
 npm run dev:friendogram        # same as: npm run dev:game -- games/friendogram
 ```
 
-Checks (typecheck, SDK validation, solver proof, mock-wallet browser runs):
+Checks (typecheck, SDK validation, solver and reward proofs, mock-wallet browser runs):
 
 ```sh
 npm install -D playwright && npx playwright install chromium   # once
@@ -83,6 +83,12 @@ choose an owned hardwired Generations Friend (generation ≥ 1) and play.
   *Next puzzle*. It stays still with reduced motion.
 - **Session economy ledger (Gallery):** canvases bought, the live-play 50% burn / 50%
   rewards split, lens burn, relics sold back, and total RF removed from supply.
+
+- **☀ Daily tasks, streaks and the Daily Pot:** five daily tasks pay Ink and points; points ×
+  streak weight (up to ×3 at 30 days) buy a share of a pot funded by the canvas edge, capped
+  below that edge so nothing returns ≥ 100%. Missing a day halves the streak. The preview has
+  *Preview: next day* / *skip a day* buttons because the SDK can't save between visits. Full
+  analysis and simulation: [economy/README.md](economy/README.md).
 
 ## Economy (simulated)
 

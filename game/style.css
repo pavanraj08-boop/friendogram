@@ -105,3 +105,10 @@
 @keyframes fg-stroll{from{transform:translateX(-90px)}to{transform:translateX(330px)}}
 @media (prefers-reduced-motion:reduce){.fg-walking canvas{animation:none;position:static}}
 @media (max-aspect-ratio:1/1){.fg-celebrate-card{padding:8px 10px}.fg-celebrate-card h2{font-size:14px}.fg-walk{height:44px}.fg-walk canvas{width:40px;height:40px}}
+.fg-streak{display:flex;flex-direction:column;gap:2px;background:#000;color:#fff;padding:10px 12px;margin-bottom:8px}
+.fg-streak strong{color:#ccff00;font-size:16px}.fg-streak small{color:#bbb}
+.fg-tasks{list-style:none;padding:0;margin:0 0 10px}
+.fg-tasks li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #ddd}
+.fg-tasks li small{color:#555}.fg-tasks .fg-done-task{background:#f3ffcc}
+.fg-game button.fg-daily-btn{background:#000;color:#ccff00}
+.fg-game details summary{cursor:pointer;font-weight:bold}

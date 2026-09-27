@@ -69,9 +69,9 @@ await testGame("./games/friendogram", {
     await page.getByRole("button", { name: /Confirm/ }).click();
     await game.getByRole("heading", { name: /^Relics/ }).waitFor();
 
-    // Ledger: 1 canvas bought (1 RF), 0.5 burned live, 3.5 RF redeemed, stamps listed.
+    // Ledger: 1 canvas bought (1 RF), edge 0.10 → 0.06 pot / 0.02 burn, 3.5 RF redeemed.
     const ledger = (await game.locator(".fg-ledger").innerText()).replace(/\s+/g, " ");
-    ok("ledger counts purchase, 50% burn, redemption and total", /Canvases bought 1 · 1 RF/.test(ledger) && /burned in live play \(50%\) 0\.5 RF/.test(ledger) && /Relics sold back 3\.5 RF/.test(ledger) && /RF removed from supply 🔥 0\.5 RF/.test(ledger), ledger.slice(0, 220));
+    ok("ledger counts purchase, edge split, redemption and total burn", /Canvases bought 1 · 1 RF/.test(ledger) && /edge to ☀ Daily Pot \(60%\) 0\.06 RF/.test(ledger) && /edge burned \(20%\) 0\.02 RF/.test(ledger) && /Relics sold back 3\.5 RF/.test(ledger) && /RF removed from supply 🔥 0\.02 RF/.test(ledger), ledger.slice(0, 220));
     ok("stamp totals shown in gallery", /◆ Perfect[^]*1 earned/.test(await game.locator(".fg-list").nth(2).innerText()) || /1 earned/.test(await game.locator("body").innerText()));
     await page.screenshot({ path: "./artifacts/iterate-gallery.png" });
     await game.getByRole("button", { name: "Close Gallery" }).click();

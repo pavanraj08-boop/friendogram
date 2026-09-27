@@ -11,6 +11,7 @@ import { SIZE, clues, difficulty, emptyGrid, isSolved, lineSatisfied, pictureRow
 import { RELICS } from "./relics";
 import { perkFor, PERKS, type Perk } from "./perks";
 import { dailyFor } from "./daily";
+import { EDGE_SPLIT, INK_PER_LENS, INK_PER_POINT, ALL_TASKS_BONUS, STREAK_TIERS, TASKS, dayPoints, halveStreak, nextTier, potClaim, tierFor, type TaskId } from "./rewards";
 import "@rarefriends/friendsdk/frame.css";
 import "./style.css";
 
@@ -19,7 +20,7 @@ type Puzzle = Readonly<{
   facing?: SpriteFacing; walking?: boolean; playId?: bigint; outcomeId?: number;
 }>;
 type Progress = { grid: Cell[]; initial: Cell[]; given: readonly number[]; stars: number; mistakes: number; seconds: number; solved: boolean; revealed: boolean; lenses: number; freeLeft: number; forgiven: number; assistUsed: boolean; stamps: readonly string[] };
-type Menu = "help" | "shop" | "gallery" | "settings" | "reward" | null;
+type Menu = "help" | "shop" | "gallery" | "settings" | "reward" | "daily" | null;
 type Tool = "fill" | "mark";
 
 const rf = (value: bigint) => `${formatGameAmount(value, 18)} RF`;
@@ -36,7 +37,8 @@ const FAMILY_SHARE: Record<string, string> = {
   Hoverer: "2.5%", Colossus: "2.5%", Sparkling: "2.5%", Hollow: "2.5%",
 };
 const LENS_PRICE = RF_UNIT / 10n; // 0.1 RF per lens, 100% burned (simulated)
-const DAILY = dailyFor();
+const dailyAt = (offset: number) => dailyFor(new Date(Date.now() + offset * 86_400_000));
+type DayLog = { key: string; streak: number; points: number; weighted: number; claim: bigint; capped: boolean; eligible: boolean };
 
 const STAMPS: Record<string, { icon: string; text: string }> = {
   Perfect: { icon: "◆", text: "No mistakes and no lenses" },
@@ -103,6 +105,12 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
   const [burned, setBurned] = useState(0n), [bank, setBank] = useState(0);
   const [ledger, setLedger] = useState({ spent: 0n, redeemed: 0n, bought: 0n });
   const [celebrate, setCelebrate] = useState("");
+  const [dayOffset, setDayOffset] = useState(0);
+  const DAILY = useMemo(() => dailyAt(dayOffset), [dayOffset]);
+  const [today, setToday] = useState<{ done: ReadonlySet<TaskId>; opened: number }>({ done: new Set(), opened: 0 });
+  const [streak, setStreak] = useState(0); // consecutive played days before today
+  const [ink, setInk] = useState(0), [potEarned, setPotEarned] = useState(0n), [days, setDays] = useState<DayLog[]>([]);
+  const todayRef = useRef(today); todayRef.current = today;
   const perk = perkFor(sprites?.familyName ?? "");
   const perkRef = useRef(perk); perkRef.current = perk;
   const slowTick = useRef(false);
@@ -115,7 +123,8 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     const version = ++epoch.current;
     sound.current = createFriendSoundKit({ muted: true });
     setSprites(null); setSnapshot(null); setLoadError(""); setPuzzles([]); setProgress({}); setActiveId("");
-    setMenu("help"); setBusy(false); setError(""); setMessage(""); setMuted(true); setBurned(0n); setBank(0); setLedger({ spent: 0n, redeemed: 0n, bought: 0n }); setCelebrate(""); locked.current = false;
+    setMenu("help"); setBusy(false); setError(""); setMessage(""); setMuted(true); setBurned(0n); setBank(0); setLedger({ spent: 0n, redeemed: 0n, bought: 0n }); setCelebrate("");
+    setDayOffset(0); setToday({ done: new Set(), opened: 0 }); setStreak(0); setInk(0); setPotEarned(0n); setDays([]); locked.current = false;
     void Promise.all([createFriendReader().read(friendId), client.read()]).then(([art, value]) => {
       if (version !== epoch.current) return;
       if (value.friendId !== friendId) throw new Error("This game session does not match the selected Friend.");
@@ -123,7 +132,8 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
       setSprites(art); setSnapshot(value); setActiveId(list[0]?.id ?? "");
       const familyPerk = perkFor(art.familyName);
       // Friend of the Day: embedded canonical artwork, identical for every player today.
-      const daily: Puzzle = { id: "daily", kind: "daily", title: `Friend of the Day #${DAILY.number}`, picture: DAILY.picture, tokenId: DAILY.tokenId, family: DAILY.family };
+      const first = dailyAt(0);
+      const daily: Puzzle = { id: `daily-${first.key}`, kind: "daily", title: `Friend of the Day #${first.number}`, picture: first.picture, tokenId: first.tokenId, family: first.family };
       setPuzzles([...list, daily]);
       setProgress(Object.fromEntries([...list, daily].map(p => [p.id, newProgress(p.picture, familyPerk)])));
     }).catch(cause => { if (version === epoch.current) setLoadError(cause instanceof Error ? cause.message : "Could not load your Friend."); });
@@ -163,6 +173,19 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
   }, [reducedMotion, paused]);
 
   const progressRef = useRef(progress); progressRef.current = progress;
+  /** Daily task completion: first time today only; pays Ink immediately and counts toward the pot. */
+  const markTask = useCallback((id: TaskId, opened = 0) => {
+    const current = todayRef.current;
+    const done = new Set(current.done), fresh = !done.has(id);
+    done.add(id);
+    const next = { done, opened: current.opened + opened };
+    todayRef.current = next; setToday(next);
+    if (!fresh) return;
+    const task = TASKS.find(t => t.id === id)!;
+    const bonus = done.size === TASKS.length ? ALL_TASKS_BONUS : 0;
+    setInk(n => n + (task.points + bonus) * INK_PER_POINT);
+    setMessage(`☀ Daily task: ${task.label} · +${(task.points + bonus) * INK_PER_POINT} Ink${bonus ? " · all tasks bonus!" : ""}`);
+  }, []);
   const solve = useCallback((puzzle: Puzzle, revealed: boolean) => {
     if (!revealed && perkRef.current.bankOnSolve) setBank(b => b + perkRef.current.bankOnSolve);
     const done = progressRef.current[puzzle.id];
@@ -173,11 +196,14 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     ].filter((v): v is string => Boolean(v));
     setProgress(all => ({ ...all, [puzzle.id]: { ...all[puzzle.id], solved: true, revealed, stamps, grid: pictureRows(puzzle.picture).flat().map(on => (on ? 1 : 2) as Cell) } }));
     if (puzzle.kind !== "canvas") setCelebrate(puzzle.id);
+    if (!revealed && puzzle.kind === "daily") markTask("daily");
+    if (!revealed && puzzle.kind === "canvas") markTask("solve_canvas");
+    if (stamps.length) markTask("stamp");
     if (puzzle.kind === "canvas" && puzzle.outcomeId) {
       sound.current?.play(revealCue(puzzle.outcomeId)); setMessage(""); setError(""); setRewardId(puzzle.id); setMenu("reward");
     } else if (puzzle.kind === "daily") { sound.current?.play("reveal-legendary"); setMessage(`Friend of the Day solved! #${puzzle.tokenId} is a ${puzzle.family}. Result card in Gallery.`); }
     else { sound.current?.play("reveal-rare"); setMessage(`Solved! That's ${sprites ? `your ${sprites.familyName}` : "your Friend"}.`); }
-  }, [sprites]);
+  }, [sprites, markTask]);
 
   const setCell = useCallback((index: number, value: Cell) => {
     const state = active ? progressRef.current[active.id] : undefined;
@@ -219,6 +245,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     if (paid === "rf") setBurned(b => b + lensCost);
     setError(""); setMessage(paid === "rf" ? `Lens used: ${rf(lensCost)} burned (simulated).` : paid === "bank" ? "Lens used from your Kinship bank." : `Free ${perk.name} lens used.`);
     sound.current?.play("action-ready");
+    markTask("lens");
     if (isSolved(grid, active.picture)) solve(active, false);
   };
 
@@ -305,6 +332,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     if (settled.outcomeId === null) { setMessage(`Canvas #${play.id} is still waiting for its randomness. Use Resume canvas.`); return; }
     addCanvas(settled.id, settled.outcomeId);
     setMessage("The canvas is sealed. Solve it to reveal what you found.");
+    markTask("canvas", 1);
   }, "action-start");
 
   if (loadError) return <div className="fg-loading" role="alert"><p>{loadError}</p>
@@ -328,9 +356,28 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
   const feedback = error || message || (busy ? "Waiting for confirmation…" : "");
   const buy = (q: bigint) => void act(() => client.buy(q), "purchase").then(ok => { if (ok) setLedger(l => ({ ...l, spent: l.spent + price * q, bought: l.bought + q })); });
   const sell = (outcomeId: number) => act(() => client.redeem(outcomeId, 1n), "reward").then(ok => { if (ok) setLedger(l => ({ ...l, redeemed: l.redeemed + definition.outcomes[outcomeId - 1].reward })); return ok; });
-  const liveBurn = ledger.spent / 2n + burned;
+  const liveBurn = ledger.spent * BigInt(EDGE_SPLIT.burn) / 1000n + burned;
   const nextUnsolved = () => { const i = puzzles.findIndex(p => p.id === active.id); return [...puzzles.slice(i + 1), ...puzzles.slice(0, i)].find(p => !progress[p.id]?.solved && p.kind !== "canvas"); };
   const celebrated = celebrate ? puzzles.find(p => p.id === celebrate) : undefined, cstate = celebrated && progress[celebrated.id];
+  const playedToday = today.done.size > 0, liveStreak = streak + (playedToday ? 1 : 0);
+  const [, weightNow, capNow] = tierFor(Math.max(1, liveStreak)), upcoming = nextTier(Math.max(1, liveStreak));
+  const canvasSpendToday = price * BigInt(today.opened);
+  const claimToday = potClaim(today.done, Math.max(1, liveStreak), canvasSpendToday);
+  /** Preview-only day change: settle today's pot claim, move the streak, roll in the next Friend of the Day. */
+  const endDay = (skipNext: boolean) => {
+    const log: DayLog = { key: DAILY.key, streak: liveStreak, points: dayPoints(today.done), weighted: claimToday.weighted, claim: claimToday.claim, capped: claimToday.capped, eligible: claimToday.eligible };
+    let s = playedToday ? streak + 1 : halveStreak(streak);
+    const logs = [log];
+    if (skipNext) { const missed = dailyAt(dayOffset + 1); logs.push({ key: missed.key, streak: 0, points: 0, weighted: 0, claim: 0n, capped: false, eligible: false }); s = halveStreak(s); }
+    const offset = dayOffset + (skipNext ? 2 : 1), d = dailyAt(offset);
+    setPotEarned(v => v + log.claim); setDays(list => [...logs.reverse(), ...list].slice(0, 30));
+    setStreak(s); setDayOffset(offset); todayRef.current = { done: new Set(), opened: 0 }; setToday(todayRef.current);
+    const id = `daily-${d.key}`;
+    const puzzle: Puzzle = { id, kind: "daily", title: `Friend of the Day #${d.number}`, picture: d.picture, tokenId: d.tokenId, family: d.family };
+    setPuzzles(list => (list.some(p => p.id === id) ? list : [...list, puzzle]));
+    setProgress(all => (all[id] ? all : { ...all, [id]: newProgress(puzzle.picture, perkRef.current) }));
+    setMessage(`${log.eligible ? `Pot claim settled: ${rf(log.claim)} (simulated).` : "No pot claim: open a canvas to qualify."} ${skipNext ? "Skipped a day, so the streak halved." : ""} New ☀ Friend of the Day #${d.number}.`);
+  };
   const stampLine = (list: readonly string[]) => list.length ? list.map(k => `${STAMPS[k].icon} ${k}`).join("  ") : "No stamps this time";
 
   return <section className="fg-game" aria-label="Friendogram" aria-busy={busy}>
@@ -378,7 +425,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
 
       <aside className="fg-side">
         <header><h1>Friendogram</h1><p className="fg-balance">{modeLabel} · {rf(spendable)} · {snapshot.consumables.toString()} canvas</p>
-          <p className="fg-burn" aria-label={`${rf(burned)} burned on lenses`}>🔥 {rf(burned)} burned</p></header>
+          <p className="fg-burn" aria-label={`${rf(burned)} burned on lenses`}>🔥 {rf(burned)} burned · ☀ streak {liveStreak} · ×{weightNow} · {ink} Ink</p></header>
         <p className="fg-perk" title={perk.text}><strong>{perk.family} perk · {perk.name}</strong> {perk.text}</p>
         <div className="fg-card">
           <canvas ref={preview} width={96} height={96} aria-label={state.solved ? `${active.title} solved` : "Your progress"} />
@@ -407,6 +454,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
         {active.kind === "canvas" && !state.solved && <button type="button" className="fg-wide" onClick={() => solve(active, true)}>Reveal now (skip puzzle)</button>}
         <div className="fg-actions">
           <button type="button" className="rf-frame-primary" onClick={() => { setMenu("shop"); setError(""); }}>Canvases</button>
+          <button type="button" className="fg-daily-btn" onClick={() => setMenu("daily")}>☀ Daily {today.done.size}/{TASKS.length}</button>
           <button type="button" onClick={() => setMenu("gallery")}>Gallery · {solvedPortraits}/{portraits.length}</button>
           <button type="button" onClick={() => setMenu("settings")} aria-label="Settings">Settings</button>
           <button type="button" onClick={() => setMenu("help")} aria-label="How to play">?</button>
@@ -414,7 +462,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
         <p className="fg-status" role={error ? "alert" : "status"}>{feedback}</p>
       </aside>
     </div>
-    {menu && <GameMenu title={menu === "help" ? "Friendogram" : menu === "shop" ? "Mystery Canvas" : menu === "gallery" ? "Gallery" : menu === "reward" ? "Canvas revealed" : "Settings"}
+    {menu && <GameMenu title={menu === "help" ? "Friendogram" : menu === "shop" ? "Mystery Canvas" : menu === "gallery" ? "Gallery" : menu === "reward" ? "Canvas revealed" : menu === "daily" ? `☀ Daily · ${DAILY.key}` : "Settings"}
       onClose={busy ? undefined : () => { setMenu(null); setError(""); }}
       footer={menu === "help" ? <button type="button" className="rf-frame-primary" onClick={() => setMenu(null)}>Start solving</button> : undefined}>
       {menu === "help" ? <>
@@ -425,6 +473,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
           <li><strong>Never guess.</strong> Every puzzle can be finished by logic alone. Dotted <span className="fg-dot">•</span> anchors are given where your Friend's shape would otherwise need a guess.</li>
         </ol>
         <p><strong>{perk.family} perk · {perk.name}:</strong> {perk.text}</p>
+        <p><strong>☀ Daily:</strong> five daily tasks earn Ink and a share of the Daily Pot (real RF in a live version, funded by the canvas edge). Keep a streak to raise your share, up to ×3.</p>
         <p><strong>Also here:</strong> ☀ Friend of the Day #{DAILY.number} (same Friend for everyone today), lenses ({rf(lensCost)}, 100% burned), stamps for perfect, swift and pure-logic solves, and 1 RF Mystery Canvases. All RF is simulated.</p>
       </> : menu === "shop" ? <>
         <div className="fg-row">
@@ -435,7 +484,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
         <p>One canvas costs <strong>{rf(price)}</strong> and holds one relic. The prize is fixed when you open it; solving only reveals it. {snapshot.mode === "preview" && "All RF here is simulated."}</p>
         <table><thead><tr><th>Relic</th><th>Chance</th><th>Value</th></tr></thead>
           <tbody>{definition.outcomes.map((o, i) => <tr key={o.name}><td>{o.name} <small>{RELICS[i].rarity}</small></td><td>{o.chanceBps / 100}%</td><td>{rf(o.reward)}</td></tr>)}</tbody></table>
-        <p className="fg-note">Expected value {rf(expectedReward(definition))} per canvas · max {rf(maxPrize)}. In live play, half of each payment is burned and half funds Friend rewards, as with other Rare Friends gameplay.</p>
+        <p className="fg-note">Expected value {rf(expectedReward(definition))} per canvas · max {rf(maxPrize)}. The 10% edge feeds the ☀ Daily Pot ({EDGE_SPLIT.pot}%), a burn ({EDGE_SPLIT.burn}%) and the developer ({EDGE_SPLIT.developer}%) in the proposed live contract. Opening a canvas also completes a daily task.</p>
         {!canBuy && <p>{spendable < price ? "Not enough RF." : "New canvases are paused until there's enough free backing."}</p>}
         {feedback && <p role={error ? "alert" : "status"}>{feedback}</p>}
       </> : menu === "reward" && reward && rewardOutcome && reward.outcomeId ? <div className="fg-reward">
@@ -457,7 +506,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
       </div> : menu === "gallery" ? <>
         <h3>#{friendId.toString()} · {sprites.familyName}</h3>
         <ul className="fg-list">{portraits.map(p => { const s = progress[p.id]; return <li key={p.id}><span>{s?.solved ? "✓" : "·"} {p.title}</span><small>{s?.solved ? `${clock(s.seconds)} · ${s.mistakes} mistakes${s.stamps.length ? " · " + s.stamps.map(k => STAMPS[k].icon).join("") : ""}` : `unsolved · ${starText(s?.stars ?? 1)}`}</small></li>; })}</ul>
-        {(() => { const d = puzzles.find(p => p.kind === "daily"), s = d && progress[d.id]; return <>
+        {(() => { const d = puzzles.find(p => p.id === `daily-${DAILY.key}`), s = d && progress[d.id]; return <>
           <h3>☀ Friend of the Day #{DAILY.number} · {DAILY.key}</h3>
           {d && s?.solved ? <pre className="fg-share">{`Friendogram ☀ #${DAILY.number}\nFriend #${d.tokenId} (${d.family})\n${s.revealed ? "revealed" : `solved in ${clock(s.seconds)}`} · ${s.mistakes} mistakes · ${s.lenses} lenses\n${starText(s.stars)}  ${s.stamps.map(k => STAMPS[k].icon + " " + k).join("  ")}`}</pre>
             : <p>Not solved yet. Pick ☀ Friend of the Day in the puzzle list.</p>}
@@ -467,19 +516,50 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
         <h3>Session economy (simulated)</h3>
         <table className="fg-ledger"><tbody>
           <tr><td>Canvases bought</td><td>{ledger.bought.toString()} · {rf(ledger.spent)}</td></tr>
-          <tr><td>…burned in live play (50%)</td><td>{rf(ledger.spent / 2n)}</td></tr>
-          <tr><td>…to Friend rewards (50%)</td><td>{rf(ledger.spent / 2n)}</td></tr>
+          <tr><td>…10% edge to ☀ Daily Pot ({EDGE_SPLIT.pot}%)</td><td>{rf(ledger.spent * BigInt(EDGE_SPLIT.pot) / 1000n)}</td></tr>
+          <tr><td>…10% edge burned ({EDGE_SPLIT.burn}%)</td><td>{rf(ledger.spent * BigInt(EDGE_SPLIT.burn) / 1000n)}</td></tr>
           <tr><td>Lens burn (100%) · {Object.values(progress).reduce((n, s) => n + s.lenses, 0)} lenses{bank ? ` · ${bank} banked` : ""}</td><td>{rf(burned)}</td></tr>
           <tr><td>Relics sold back</td><td>{rf(ledger.redeemed)}</td></tr>
+          <tr><td>☀ Daily Pot claimed (simulated)</td><td>{rf(potEarned)}</td></tr>
           <tr className="fg-total"><td>RF removed from supply</td><td>🔥 {rf(liveBurn)}</td></tr>
         </tbody></table>
-        <p className="fg-note">Canvas burns follow the Rare Friends gameplay split and would happen on-chain in live play. Lens burns need a custom integration. Nothing here is a real transaction.</p>
+        <p className="fg-note">The SDK reference contract keeps all canvas RF as prize stake; the edge split, Daily Pot and lens burns are a proposed custom integration. Nothing here is a real transaction.</p>
         <h3>Relics · {heldCount.toString()} held</h3>
         <ul className="fg-list">{definition.outcomes.map((o, i) => <li key={o.name}><span><strong>{o.name}</strong> <small>{snapshot.inventory[i].toString()} held · {rf(o.reward)}</small></span>
           <button type="button" disabled={busy || paused || snapshot.inventory[i] === 0n || o.reward === 0n} onClick={() => void sell(i + 1)}>Sell one</button></li>)}</ul>
         <h3>Family perks</h3>
         <ul className="fg-list">{Object.values(PERKS).map(p => <li key={p.family} className={p.family === perk.family ? "fg-mine" : undefined}><span><strong>{p.family}</strong> <small>{p.share}</small></span><small>{p.name}: {p.text}</small></li>)}</ul>
         {feedback && <p role={error ? "alert" : "status"}>{feedback}</p>}
+      </> : menu === "daily" ? <>
+        <div className="fg-streak">
+          <strong>Streak: day {liveStreak}{playedToday ? " ✓ today" : ` · complete a task to make it day ${streak + 1}`}</strong>
+          <span>Share weight ×{weightNow} · claim cap {capNow}% of today's canvas spend</span>
+          <small>{upcoming ? `Day ${upcoming[0]}: ×${upcoming[1]} and a ${upcoming[2]}% cap` : "Top tier reached"} · missing a day halves the streak</small>
+        </div>
+        <ul className="fg-tasks">{TASKS.map(t => <li key={t.id} className={today.done.has(t.id) ? "fg-done-task" : undefined}>
+          <span>{today.done.has(t.id) ? "✓" : "○"} <strong>{t.label}</strong> <small>{t.hint}</small></span><small>+{t.points} pts · +{t.points * INK_PER_POINT} Ink</small></li>)}
+          <li className={today.done.size === TASKS.length ? "fg-done-task" : undefined}><span>{today.done.size === TASKS.length ? "✓" : "○"} <strong>All five</strong></span><small>+{ALL_TASKS_BONUS} pts · +{ALL_TASKS_BONUS * INK_PER_POINT} Ink</small></li>
+        </ul>
+        <table className="fg-ledger"><tbody>
+          <tr><td>Today's points × streak weight</td><td>{dayPoints(today.done)} × {weightNow} = {claimToday.weighted.toFixed(1)}</td></tr>
+          <tr><td>Weighted share of the pot</td><td>{rf(claimToday.share)}</td></tr>
+          <tr><td>Your cap ({capNow}% of {rf(canvasSpendToday)} opened)</td><td>{rf(claimToday.cap)}</td></tr>
+          <tr className="fg-total"><td>Projected pot claim {claimToday.eligible ? "" : "(open a canvas to qualify)"}</td><td>☀ {rf(claimToday.claim)}</td></tr>
+          <tr><td>Pot earned so far (simulated)</td><td>{rf(potEarned)}</td></tr>
+        </tbody></table>
+        <div className="fg-row">
+          <button type="button" disabled={ink < INK_PER_LENS} onClick={() => { setInk(n => n - INK_PER_LENS); setBank(b => b + 1); setMessage(`Traded ${INK_PER_LENS} Ink for a banked lens.`); }}>Trade {INK_PER_LENS} Ink → 1 lens ({ink} Ink)</button>
+        </div>
+        <p className="fg-note"><strong>Preview only:</strong> the SDK can't save progress between visits, so these buttons fast-forward the calendar to show how streaks and claims work.</p>
+        <div className="fg-row">
+          <button type="button" className="rf-frame-primary" onClick={() => endDay(false)}>Preview: next day ›</button>
+          <button type="button" onClick={() => endDay(true)}>Preview: skip a day</button>
+        </div>
+        {days.length > 0 && <ul className="fg-list">{days.slice(0, 7).map((d, i) => <li key={i}><span>{d.key} · day {d.streak}</span><small>{d.points} pts{d.eligible ? ` → ${rf(d.claim)}${d.capped ? " (capped)" : ""}` : " · no claim"}</small></li>)}</ul>}
+        <details className="fg-note"><summary>How the Daily Pot is funded</summary>
+          <p>Each 1 RF canvas pays back 0.90 RF on average in relics. The 0.10 RF edge would be routed {EDGE_SPLIT.pot}% to the Daily Pot, {EDGE_SPLIT.burn}% burned and {EDGE_SPLIT.developer}% to the developer. The pot is split by points × streak weight, and each claim is capped below the edge, so no play pattern gets back more than it spends. Unclaimed pot beyond 2 days of inflow is burned.</p>
+          <p>Streak tiers: {STREAK_TIERS.map(([d, w, c]) => `day ${d} ×${w} (${c}% cap)`).join(" · ")}. Tuned in economy/simulate.py.</p>
+        </details>
       </> : menu === "settings" ? <>
         <button type="button" aria-pressed={!muted} onClick={() => { const next = !muted; setMuted(next); sound.current?.setMuted(next); if (!next) void sound.current?.unlock(); }}>{muted ? "Sound off" : "Sound on"}</button>
         <label><input type="checkbox" checked={reducedMotion} onChange={event => setReducedMotion(event.target.checked)} /> Reduce motion</label>
