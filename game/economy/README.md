@@ -17,6 +17,7 @@ The earlier "50% burned / 50% rewards" line described Rare Friends platform paym
 - **60% → ☀ Daily Pot**, **20% → burned**, **20% → developer**.
 - The pot is split each UTC day by *task points × streak weight* among players who opened ≥ 1 canvas that day.
 - Each claim is capped at a streak-scaled share of *that day's own canvas spend* (3% on day 1 → 9% at a 30-day streak). The cap is always below the 10% edge, so **no play pattern can get back 100% or more**.
+- **Featured Friend royalty:** 10% of each day's pot goes to that day's ☀ Friend of the Day, paid into *that Friend's own wallet*. Being featured pays the NFT that appears as content (≈ 7.8 RF/day at 1,500 players).
 - Unclaimed pot above 2 days of inflow is burned.
 
 ## Daily tasks (points, Ink = points × 10)
@@ -30,6 +31,10 @@ The earlier "50% burned / 50% rewards" line described Rare Friends platform paym
 | Use a lens | 1 | Small nudge toward the RF burn |
 | All five | +2 | Completion bonus |
 
+**Generation bonus (Grow):** Ink +50% for Gen 1, +40% Gen 2, +30% Gen 3, +20% Gen 4, +10% Gen 5, +0% Gen 6. Ink only, never pot weight, so buying a higher generation can't buy a bigger RF share.
+
+**Happiness:** each task +5%, all five +5% more (simulated; a live version would feed the rarefriends.com Happiness meter).
+
 Streak tiers: day 1 ×1.0 (3% cap), 2 ×1.15, 3 ×1.3 (4.5%), 5 ×1.6, 7 ×2.0 (6%), 14 ×2.5 (7.5%), 30 ×3.0 (9%). Missing a day **halves** the streak rather than resetting it. Ink (never redeemable for RF) buys lenses at 50 Ink each.
 
 ## Results (45 days, 1,500 players)
@@ -38,11 +43,13 @@ Streak tiers: day 1 ×1.0 (3% cap), 2 ×1.15, 3 ×1.3 (4.5%), 5 ×1.6, 7 ×2.0 (
 |---|---:|---:|---:|---:|
 | No pot (baseline) | 90.0% | 90.0% | 90.0% | 5.7% |
 | Pot, uncapped | 92.9% | 97.3% | **105.5% (exploit)** | 7.6% |
-| **Chosen: pot + streak caps** | 93.1% | **96.9%** | 97.3% | **8.1%** |
+| Pot + streak caps | 93.1% | 96.9% | 97.3% | 8.1% |
+| **Chosen: + 10% featured-Friend royalty** | 93.1% | **96.9%** | 97.3% | **7.7%** |
 
 - Daily players earn **6.9% of canvas spend back from the pot vs 3.1% for casual players (2.2×)**, about 0.14 RF per day at 2.2 canvases a day.
 - The uncapped version let a one-canvas-a-day grinder take 105% back, draining everyone else. The cap closes it.
-- Burn rises from 5.7% to 8.1% of all RF spent, because unclaimed pot overflow burns.
+- Burn rises from 5.7% to 7.7% of all RF spent, because unclaimed pot overflow burns.
+- The royalty costs players almost nothing: caps already bind, so it comes out of pot that would otherwise overflow and burn (burn 8.1% → 7.7%).
 - `rewards.test.mjs` checks all 1,280 task/streak/spend combinations: the worst case returns 99.0%.
 
 ## Needs integration before launch

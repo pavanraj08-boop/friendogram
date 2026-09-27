@@ -33,12 +33,12 @@ def cap_pct(s):  # max pot claim as a share of that day's own CANVAS spend; alwa
         if s >= d: return c
     return .03
 
-def run(pot_edge=0.5, burn_edge=0.2, lens_pot=0.5, days=60, players=2000, weights=True, capped=True, overflow_days=2):
+def run(pot_edge=0.5, burn_edge=0.2, lens_pot=0.5, days=60, players=2000, weights=True, capped=True, overflow_days=2, royalty=0.10):
     seg_of = []
     for name, s in SEGMENTS.items(): seg_of += [name] * int(players * s["share"])
     streak = [0] * len(seg_of)
     stats = {n: dict(spent=0., relic=0., pot=0., days=0) for n in SEGMENTS}
-    pot = 0.; burned = 0.; dev = 0.; carry = 0.; wpts_total = [0.]; pot_total = [0.]
+    pot = 0.; burned = 0.; dev = 0.; carry = 0.; wpts_total = [0.]; pot_total = [0.]; royalties = []; inflows = []
     for day in range(days):
         got = [0.] * len(seg_of); pts = [0.] * len(seg_of); inflow = 0.; spend_today = [0.] * len(seg_of)
         for i, n in enumerate(seg_of):
@@ -58,7 +58,8 @@ def run(pot_edge=0.5, burn_edge=0.2, lens_pot=0.5, days=60, players=2000, weight
             done = {"canvas"} | {k for k, pr in s["t"].items() if random.random() < pr and (k != "lens" or l > 0) and (k != "solve_canvas" or c > 0)}
             base = sum(TASKS[k] for k in done) + (ALL_BONUS if len(done) == len(TASKS) else 0)
             pts[i] = base * (streak_weight(streak[i]) if weights else 1); wpts_total[0] += pts[i]
-        pot = carry + inflow; total = sum(pts); paid = 0.; pot_total[0] += inflow
+        royalty_today = inflow * royalty; royalties.append(royalty_today)  # featured Friend of the Day's wallet
+        pot = carry + inflow - royalty_today; total = sum(pts); paid = 0.; pot_total[0] += inflow - royalty_today; inflows.append(inflow)
         # Water-filling: split by weighted points; anyone hitting their cap passes the excess to the rest.
         active = [i for i, p in enumerate(pts) if p]; left = pot
         for _ in range(8):
@@ -80,7 +81,8 @@ def run(pot_edge=0.5, burn_edge=0.2, lens_pot=0.5, days=60, players=2000, weight
         rtp = (v["relic"] + v["pot"]) / v["spent"] if v["spent"] else 0
         out[n] = dict(rtp=round(rtp, 4), canvas_rtp=round((v["relic"] + v["pot"]) / v.get("canvas", 1) if v.get("canvas") else 0, 4), pot_per_rf=round(v["pot"] / v.get("canvas", 1), 4) if v.get("canvas") else 0, pot_per_day=round(v["pot"] / max(v["days"], 1), 4), spent_per_day=round(v["spent"] / max(v["days"], 1), 3))
     spent = sum(v["spent"] for v in stats.values())
-    out["rate"] = dict(pot_inflow_per_weighted_point=round(pot_total[0] / max(wpts_total[0], 1), 5))
+    out["rate"] = dict(pot_inflow_per_weighted_point=round(pot_total[0] / max(wpts_total[0], 1), 5),
+                       pot_inflow_per_day=round(st.mean(inflows[5:]), 2), featured_royalty_per_day=round(st.mean(royalties[5:]), 3))
     out["house"] = dict(burned=round(burned, 1), burn_pct_of_spend=round(100 * burned / spent, 2), dev_pct=round(100 * dev / spent, 2),
                         paid_back_pct=round(100 * sum(v["relic"] + v["pot"] for v in stats.values()) / spent, 2))
     return out
@@ -88,7 +90,8 @@ def run(pot_edge=0.5, burn_edge=0.2, lens_pot=0.5, days=60, players=2000, weight
 if __name__ == "__main__":
     SEGMENTS["grinder"] = dict(share=.10, p=1.0, canv=(1, 1), lens=(0, 0), t=dict(daily=1, stamp=1, solve_canvas=1, lens=1))
     SEGMENTS["casual"]["share"] = .45
-    for label, cfg in [("no pot (baseline)", dict(pot_edge=0, burn_edge=0, lens_pot=0, capped=False)),
-                       ("pot, uncapped (exploitable)", dict(pot_edge=.6, burn_edge=.2, lens_pot=0, capped=False)),
-                       ("CHOSEN: pot 60% / burn 20% / dev 20%, streak caps", dict(pot_edge=.6, burn_edge=.2, lens_pot=0))]:
+    for label, cfg in [("no pot (baseline)", dict(pot_edge=0, burn_edge=0, lens_pot=0, capped=False, royalty=0)),
+                       ("pot, uncapped (exploitable)", dict(pot_edge=.6, burn_edge=.2, lens_pot=0, capped=False, royalty=0)),
+                       ("pot + streak caps, no royalty", dict(pot_edge=.6, burn_edge=.2, lens_pot=0, royalty=0)),
+                       ("CHOSEN: pot 60% / burn 20% / dev 20%, streak caps, 10% featured-Friend royalty", dict(pot_edge=.6, burn_edge=.2, lens_pot=0))]:
         print("==", label); [print("  ", k, json.dumps(v)) for k, v in run(days=45, players=1500, **cfg).items()]
