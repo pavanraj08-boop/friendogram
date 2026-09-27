@@ -1,0 +1,21 @@
+== no pot (baseline)
+   casual {"rtp": 0.8576, "canvas_rtp": 0.9, "pot_per_rf": 0.0, "pot_per_day": 0.0, "spent_per_day": 1.058}
+   regular {"rtp": 0.8573, "canvas_rtp": 0.9, "pot_per_rf": 0.0, "pot_per_day": 0.0, "spent_per_day": 2.111}
+   daily {"rtp": 0.8185, "canvas_rtp": 0.9, "pot_per_rf": 0.0, "pot_per_day": 0.0, "spent_per_day": 2.201}
+   grinder {"rtp": 0.9, "canvas_rtp": 0.9, "pot_per_rf": 0.0, "pot_per_day": 0.0, "spent_per_day": 1.0}
+   rate {"pot_inflow_per_weighted_point": 0.0}
+   house {"burned": 3547.1, "burn_pct_of_spend": 5.73, "dev_pct": 9.43, "paid_back_pct": 84.85}
+== pot, uncapped (exploitable)
+   casual {"rtp": 0.8843, "canvas_rtp": 0.9285, "pot_per_rf": 0.0285, "pot_per_day": 0.0286, "spent_per_day": 1.055}
+   regular {"rtp": 0.8889, "canvas_rtp": 0.933, "pot_per_rf": 0.033, "pot_per_day": 0.0662, "spent_per_day": 2.105}
+   daily {"rtp": 0.8844, "canvas_rtp": 0.9727, "pot_per_rf": 0.0727, "pot_per_day": 0.1455, "spent_per_day": 2.201}
+   grinder {"rtp": 1.0551, "canvas_rtp": 1.0551, "pot_per_rf": 0.1551, "pot_per_day": 0.1551, "spent_per_day": 1.0}
+   rate {"pot_inflow_per_weighted_point": 0.00644}
+   house {"burned": 4703.5, "burn_pct_of_spend": 7.62, "dev_pct": 1.89, "paid_back_pct": 90.49}
+== CHOSEN: pot 60% / burn 20% / dev 20%, streak caps
+   casual {"rtp": 0.8868, "canvas_rtp": 0.931, "pot_per_rf": 0.031, "pot_per_day": 0.031, "spent_per_day": 1.048}
+   regular {"rtp": 0.8947, "canvas_rtp": 0.9395, "pot_per_rf": 0.0395, "pot_per_day": 0.0791, "spent_per_day": 2.103}
+   daily {"rtp": 0.881, "canvas_rtp": 0.9691, "pot_per_rf": 0.0691, "pot_per_day": 0.1381, "spent_per_day": 2.199}
+   grinder {"rtp": 0.9733, "canvas_rtp": 0.9733, "pot_per_rf": 0.0733, "pot_per_day": 0.0733, "spent_per_day": 1.0}
+   rate {"pot_inflow_per_weighted_point": 0.00638}
+   house {"burned": 4998.4, "burn_pct_of_spend": 8.12, "dev_pct": 1.88, "paid_back_pct": 89.75}
