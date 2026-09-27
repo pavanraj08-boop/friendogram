@@ -89,6 +89,9 @@ choose an owned hardwired Generations Friend (generation ≥ 1) and play.
   below that edge so nothing returns ≥ 100%. Missing a day halves the streak. The preview has
   *Preview: next day* / *skip a day* buttons because the SDK can't save between visits. Full
   analysis and simulation: [economy/README.md](economy/README.md).
+- **Featured Friend royalty:** the day's ☀ Friend of the Day earns 10% of the pot into its own
+  wallet. **Generation bonus:** Gen 1 earns +50% Ink down to +0% for Gen 6 (read from the
+  Generations contract; Ink only). **Happiness:** tasks add simulated ♥ Happiness.
 
 ## Economy (simulated)
 

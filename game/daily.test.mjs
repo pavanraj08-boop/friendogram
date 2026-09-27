@@ -8,6 +8,7 @@ await testGame("./games/friendogram", {
   check: async ({ page, game }) => {
     await game.getByRole("button", { name: "Start solving" }).click();
     const header = () => game.locator(".fg-burn").innerText();
+    ok("generation read from chain and shown", /Gen 1 · \+50% Ink/.test(await game.locator(".fg-vitals").innerText()), await game.locator(".fg-vitals").innerText());
     ok("streak and Ink shown in header", /streak 0 · ×1 · 0 Ink/.test(await header()), await header());
     const openDaily = async () => { await game.getByRole("button", { name: /☀ Daily \d\/5/ }).click(); await game.locator(".fg-streak").waitFor(); };
     const closeDaily = () => game.getByRole("button", { name: /Close ☀ Daily/ }).click();
@@ -19,7 +20,8 @@ await testGame("./games/friendogram", {
 
     // Task: lens (free Hoverer lens).
     await game.getByRole("button", { name: "🔍 Row" }).click();
-    ok("lens completes a task and pays Ink", /streak 1 · ×1 · 10 Ink/.test(await header()), await header());
+    ok("a task raises Happiness by 5%", /Happiness \+5% today/.test(await game.locator(".fg-vitals").innerText()));
+    ok("lens completes a task and pays Ink (+50% Gen 1 bonus)", /streak 1 · ×1 · 15 Ink/.test(await header()), await header());
 
     // Task: open a canvas (+ solve it via painting everything with Assist on → solve_canvas, maybe stamps none).
     await game.getByRole("button", { name: "Canvases" }).click();
@@ -34,15 +36,15 @@ await testGame("./games/friendogram", {
 
     await openDaily();
     const ledger = (await game.locator(".fg-ledger").innerText()).replace(/\s+/g, " ");
-    ok("claim eligible: 4 pts × ×1 = 0.02552 RF, under the 3% cap", /4 × 1 = 4\.0/.test(ledger) && /cap \(3% of 1 RF opened\) 0\.03 RF/.test(ledger) && /Projected pot claim ☀ 0\.02552 RF/.test(ledger), ledger.slice(0, 200));
+    ok("claim eligible: 4 pts × ×1 = 0.02308 RF, under the 3% cap", /4 × 1 = 4\.0/.test(ledger) && /cap \(3% of 1 RF opened\) 0\.03 RF/.test(ledger) && /Projected pot claim ☀ 0\.02308 RF/.test(ledger), ledger.slice(0, 200));
     // Next day: streak 2, claim settles, new daily puzzle.
     await game.getByRole("button", { name: /Preview: next day/ }).click();
     await game.locator(".fg-streak").waitFor();
     const st = await game.locator(".fg-streak").innerText();
     ok("next day: streak counts on (day 1 → 2 once you play)", /Streak: day 1/.test(st), st.split("\n")[0]);
     ok("tasks reset for the new day", /☀ Daily 0\/5/.test(await game.locator(".fg-daily-btn").innerText()));
-    ok("previous day logged with its claim", /4 pts → 0\.02552 RF/.test(await game.locator(".fg-list").last().innerText()));
-    ok("pot earned carried over", /Pot earned so far \(simulated\) 0\.02552 RF/.test((await game.locator(".fg-ledger").innerText()).replace(/\s+/g, " ")));
+    ok("previous day logged with its claim", /4 pts → 0\.02308 RF/.test(await game.locator(".fg-list").last().innerText()));
+    ok("pot earned carried over", /Pot earned so far \(simulated\) 0\.02308 RF/.test((await game.locator(".fg-ledger").innerText()).replace(/\s+/g, " ")));
     await closeDaily();
     const options = await game.locator("select option").allInnerTexts();
     ok("a new Friend of the Day was added", options.filter(o => /Friend of the Day/.test(o)).length === 2, options.filter(o => /Friend of the Day/.test(o)).join(" | "));
@@ -56,9 +58,13 @@ await testGame("./games/friendogram", {
 
     // Ink trade needs 50 Ink.
     const trade = game.getByRole("button", { name: /Trade 50 Ink/ });
-    ok("50 Ink earned from 3 tasks unlocks a lens trade", await trade.isEnabled() && /\(50 Ink\)/.test(await trade.innerText()));
+    ok("75 Ink (3 tasks × Gen 1 bonus) unlocks a lens trade", await trade.isEnabled() && /\(75 Ink\)/.test(await trade.innerText()));
     await trade.click();
-    ok("trade spends Ink and banks a lens", /\(0 Ink\)/.test(await trade.innerText()) && await trade.isDisabled());
+    ok("trade spends 50 Ink and banks a lens", /\(25 Ink\)/.test(await trade.innerText()) && await trade.isDisabled());
+    const royalty = await game.locator(".fg-royalty").innerText();
+    ok("featured Friend royalty explained with the Friend's ID", /earns 10% of the pot, paid into that Friend's own wallet: about 7\.8 RF a day/.test(royalty) && /#\d+/.test(royalty), royalty.replace(/\s+/g, " ").slice(0, 150));
+    const table = (await game.locator(".fg-ledger").innerText()).replace(/\s+/g, " ");
+    ok("Happiness and generation bonus shown", /Happiness from today's tasks \+0%/.test(table) && /Gen 1 bonus \+50%\) ×1\.5/.test(table), table.slice(-160));
     await page.screenshot({ path: "./artifacts/daily-menu.png" });
     await closeDaily();
 

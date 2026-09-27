@@ -25,9 +25,24 @@ export const tierFor = (streak: number) => [...STREAK_TIERS].reverse().find(([d]
 export const nextTier = (streak: number) => STREAK_TIERS.find(([d]) => d > streak);
 
 /** Canvas edge routing proposed for a live contract (reference ChanceGame keeps 100% as developer stake). */
-export const EDGE_SPLIT = { pot: 60, burn: 20, developer: 20 } as const;
-/** Steady-state pot inflow per weighted point from the 1,500-player simulation (0.00638 RF). */
-export const POT_RF_PER_WEIGHTED_POINT = 6_380_000_000_000_000n; // 0.00638 RF in base units
+export const EDGE_SPLIT = { pot: 60, burn: 20, developer: 20 } as const; // the pot share then pays 10% to the featured Friend
+/** Steady-state pot per weighted point from the 1,500-player simulation, after the royalty (0.00577 RF). */
+export const POT_RF_PER_WEIGHTED_POINT = 5_770_000_000_000_000n; // 0.00577 RF in base units
+/** The day's ☀ Friend of the Day earns this share of the pot, paid to that Friend's own wallet. */
+export const FEATURED_ROYALTY_PCT = 10;
+/** Model figures for 1,500 players: pot inflow ≈ 78 RF/day, featured-Friend royalty ≈ 7.8 RF/day. */
+export const MODEL_POT_PER_DAY = 78_000_000_000_000_000_000n;
+export const MODEL_ROYALTY_PER_DAY = (MODEL_POT_PER_DAY * BigInt(FEATURED_ROYALTY_PCT)) / 100n;
+
+/** Generation bonus (Grow): earlier generations earn more Ink. Ink only, never pot weight or RF. */
+export const GENERATION_INK_BONUS: Readonly<Record<number, number>> = { 1: 50, 2: 40, 3: 30, 4: 20, 5: 10, 6: 0 };
+export const inkFor = (points: number, generation: number | null) =>
+  Math.round(points * INK_PER_POINT * (100 + (generation ? GENERATION_INK_BONUS[generation] ?? 0 : 0)) / 100);
+
+/** Happiness (simulated): each task adds 5%, all five adds another 5%. A live version would feed rarefriends.com Happiness. */
+export const HAPPINESS_PER_TASK = 5;
+export const HAPPINESS_ALL_BONUS = 5;
+export const happinessFor = (done: ReadonlySet<TaskId>) => done.size * HAPPINESS_PER_TASK + (done.size === TASKS.length ? HAPPINESS_ALL_BONUS : 0);
 export const POT_OVERFLOW_DAYS = 2; // unclaimed pot above 2 days of inflow is burned
 
 export function dayPoints(done: ReadonlySet<TaskId>) {

@@ -112,3 +112,7 @@
 .fg-tasks li small{color:#555}.fg-tasks .fg-done-task{background:#f3ffcc}
 .fg-game button.fg-daily-btn{background:#000;color:#ccff00}
 .fg-game details summary{cursor:pointer;font-weight:bold}
+.fg-vitals{display:flex;justify-content:space-between;gap:6px;margin:0;font-size:11px}
+.fg-vitals span:first-child{color:#c2185b;font-weight:bold}
+.fg-royalty{display:flex;flex-direction:column;gap:3px;border:2px solid #000;background:#ccff00;padding:8px 10px;margin:8px 0;font-size:12px}
+@media (max-aspect-ratio:1/1){.fg-vitals{display:none}}

@@ -5,13 +5,14 @@ import type { GameComponentProps } from "@rarefriends/friendsdk/runtime";
 import { GameMenu } from "@rarefriends/friendsdk/frame";
 import { formatGameAmount } from "@rarefriends/friendsdk/ui";
 import { expectedReward, maximumPrize, RF as RF_UNIT, type GameSnapshot } from "@rarefriends/friendsdk/game";
-import { createFriendReader, spriteFrame, type GenerationSprites, type SpriteFacing } from "@rarefriends/friendsdk/sprites";
+import { createFriendReader, spriteFrame, GENERATION_SPRITE_MANIFEST, type GenerationSprites, type SpriteFacing } from "@rarefriends/friendsdk/sprites";
+import { createPublicClient, http, parseAbi } from "viem";
 import { createFriendSoundKit, type FriendSoundKit, type FriendSoundCue } from "@rarefriends/friendsdk/sounds";
 import { SIZE, clues, difficulty, emptyGrid, isSolved, lineSatisfied, pictureRows, type Cell, type Picture } from "./nonogram";
 import { RELICS } from "./relics";
 import { perkFor, PERKS, type Perk } from "./perks";
 import { dailyFor } from "./daily";
-import { EDGE_SPLIT, INK_PER_LENS, INK_PER_POINT, ALL_TASKS_BONUS, STREAK_TIERS, TASKS, dayPoints, halveStreak, nextTier, potClaim, tierFor, type TaskId } from "./rewards";
+import { EDGE_SPLIT, FEATURED_ROYALTY_PCT, GENERATION_INK_BONUS, MODEL_ROYALTY_PER_DAY, happinessFor, inkFor, INK_PER_LENS, INK_PER_POINT, ALL_TASKS_BONUS, STREAK_TIERS, TASKS, dayPoints, halveStreak, nextTier, potClaim, tierFor, type TaskId } from "./rewards";
 import "@rarefriends/friendsdk/frame.css";
 import "./style.css";
 
@@ -37,6 +38,9 @@ const FAMILY_SHARE: Record<string, string> = {
   Hoverer: "2.5%", Colossus: "2.5%", Sparkling: "2.5%", Hollow: "2.5%",
 };
 const LENS_PRICE = RF_UNIT / 10n; // 0.1 RF per lens, 100% burned (simulated)
+/** Public read of the selected Friend's generation (display and Ink bonus only; ownership stays with the SDK runtime). */
+const generationClient = createPublicClient({ transport: http(GENERATION_SPRITE_MANIFEST.rpcUrl, { retryCount: 1, timeout: 12_000 }) });
+const GENERATION_ABI = parseAbi(["function generation(uint256 tokenId) view returns (uint8)"]);
 const dailyAt = (offset: number) => dailyFor(new Date(Date.now() + offset * 86_400_000));
 type DayLog = { key: string; streak: number; points: number; weighted: number; claim: bigint; capped: boolean; eligible: boolean };
 
@@ -111,6 +115,8 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
   const [streak, setStreak] = useState(0); // consecutive played days before today
   const [ink, setInk] = useState(0), [potEarned, setPotEarned] = useState(0n), [days, setDays] = useState<DayLog[]>([]);
   const todayRef = useRef(today); todayRef.current = today;
+  const [generation, setGeneration] = useState<number | null>(null);
+  const generationRef = useRef(generation); generationRef.current = generation;
   const perk = perkFor(sprites?.familyName ?? "");
   const perkRef = useRef(perk); perkRef.current = perk;
   const slowTick = useRef(false);
@@ -124,7 +130,9 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     sound.current = createFriendSoundKit({ muted: true });
     setSprites(null); setSnapshot(null); setLoadError(""); setPuzzles([]); setProgress({}); setActiveId("");
     setMenu("help"); setBusy(false); setError(""); setMessage(""); setMuted(true); setBurned(0n); setBank(0); setLedger({ spent: 0n, redeemed: 0n, bought: 0n }); setCelebrate("");
-    setDayOffset(0); setToday({ done: new Set(), opened: 0 }); setStreak(0); setInk(0); setPotEarned(0n); setDays([]); locked.current = false;
+    setDayOffset(0); setToday({ done: new Set(), opened: 0 }); setStreak(0); setInk(0); setPotEarned(0n); setDays([]); setGeneration(null);
+    void generationClient.readContract({ address: GENERATION_SPRITE_MANIFEST.generations, abi: GENERATION_ABI, functionName: "generation", args: [friendId] })
+      .then(g => { if (version === epoch.current && g >= 1 && g <= 6) setGeneration(Number(g)); }).catch(() => undefined); locked.current = false;
     void Promise.all([createFriendReader().read(friendId), client.read()]).then(([art, value]) => {
       if (version !== epoch.current) return;
       if (value.friendId !== friendId) throw new Error("This game session does not match the selected Friend.");
@@ -183,8 +191,9 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
     if (!fresh) return;
     const task = TASKS.find(t => t.id === id)!;
     const bonus = done.size === TASKS.length ? ALL_TASKS_BONUS : 0;
-    setInk(n => n + (task.points + bonus) * INK_PER_POINT);
-    setMessage(`☀ Daily task: ${task.label} · +${(task.points + bonus) * INK_PER_POINT} Ink${bonus ? " · all tasks bonus!" : ""}`);
+    const gained = inkFor(task.points + bonus, generationRef.current);
+    setInk(n => n + gained);
+    setMessage(`☀ Daily task: ${task.label} · +${gained} Ink · ♥ +${happinessFor(done) - happinessFor(current.done)}% Happiness${bonus ? " · all tasks bonus!" : ""}`);
   }, []);
   const solve = useCallback((puzzle: Puzzle, revealed: boolean) => {
     if (!revealed && perkRef.current.bankOnSolve) setBank(b => b + perkRef.current.bankOnSolve);
@@ -414,6 +423,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
             }} />
           </div>
           <h2>{celebrated.kind === "daily" ? `It's #${celebrated.tokenId}, a ${celebrated.family}!` : "Solved!"}</h2>
+          {celebrated.kind === "daily" && <p className="fg-note">#{celebrated.tokenId?.toString()} earns a {FEATURED_ROYALTY_PCT}% royalty from today's pot.</p>}
           <p>{cstate.revealed ? "Revealed" : `${clock(cstate.seconds)} · ${cstate.mistakes} mistake${cstate.mistakes === 1 ? "" : "s"} · ${cstate.lenses} lens${cstate.lenses === 1 ? "" : "es"}`} · {starText(cstate.stars)}</p>
           <p className="fg-stamps">{stampLine(cstate.stamps)}</p>
           <div className="fg-row">
@@ -427,6 +437,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
         <header><h1>Friendogram</h1><p className="fg-balance">{modeLabel} · {rf(spendable)} · {snapshot.consumables.toString()} canvas</p>
           <p className="fg-burn" aria-label={`${rf(burned)} burned on lenses`}>🔥 {rf(burned)} burned · ☀ streak {liveStreak} · ×{weightNow} · {ink} Ink</p></header>
         <p className="fg-perk" title={perk.text}><strong>{perk.family} perk · {perk.name}</strong> {perk.text}</p>
+        <p className="fg-vitals"><span>♥ Happiness +{happinessFor(today.done)}% today</span><span>{generation ? `Gen ${generation} · +${GENERATION_INK_BONUS[generation]}% Ink` : "Gen –"}</span></p>
         <div className="fg-card">
           <canvas ref={preview} width={96} height={96} aria-label={state.solved ? `${active.title} solved` : "Your progress"} />
           <div>
@@ -473,7 +484,7 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
           <li><strong>Never guess.</strong> Every puzzle can be finished by logic alone. Dotted <span className="fg-dot">•</span> anchors are given where your Friend's shape would otherwise need a guess.</li>
         </ol>
         <p><strong>{perk.family} perk · {perk.name}:</strong> {perk.text}</p>
-        <p><strong>☀ Daily:</strong> five daily tasks earn Ink and a share of the Daily Pot (real RF in a live version, funded by the canvas edge). Keep a streak to raise your share, up to ×3.</p>
+        <p><strong>☀ Daily:</strong> five daily tasks earn Ink and a share of the Daily Pot (real RF in a live version, funded by the canvas edge). Keep a streak to raise your share, up to ×3. The Friend of the Day earns {FEATURED_ROYALTY_PCT}% of the pot into its own wallet, tasks raise ♥ Happiness, and earlier generations earn more Ink.</p>
         <p><strong>Also here:</strong> ☀ Friend of the Day #{DAILY.number} (same Friend for everyone today), lenses ({rf(lensCost)}, 100% burned), stamps for perfect, swift and pure-logic solves, and 1 RF Mystery Canvases. All RF is simulated.</p>
       </> : menu === "shop" ? <>
         <div className="fg-row">
@@ -546,7 +557,13 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
           <tr><td>Your cap ({capNow}% of {rf(canvasSpendToday)} opened)</td><td>{rf(claimToday.cap)}</td></tr>
           <tr className="fg-total"><td>Projected pot claim {claimToday.eligible ? "" : "(open a canvas to qualify)"}</td><td>☀ {rf(claimToday.claim)}</td></tr>
           <tr><td>Pot earned so far (simulated)</td><td>{rf(potEarned)}</td></tr>
+          <tr><td>♥ Happiness from today's tasks</td><td>+{happinessFor(today.done)}%</td></tr>
+          <tr><td>Ink per task ({generation ? `Gen ${generation} bonus +${GENERATION_INK_BONUS[generation]}%` : "generation unknown"})</td><td>×{generation ? (100 + GENERATION_INK_BONUS[generation]) / 100 : 1}</td></tr>
         </tbody></table>
+        <div className="fg-royalty">
+          <strong>☀ Featured Friend royalty</strong>
+          <span>Today's Friend of the Day, <strong>#{DAILY.tokenId.toString()}</strong> ({DAILY.family}), earns {FEATURED_ROYALTY_PCT}% of the pot, paid into that Friend's own wallet: about {rf(MODEL_ROYALTY_PER_DAY)} a day with 1,500 players (model).{DAILY.tokenId === friendId ? " That's your Friend!" : " Being featured pays."}</span>
+        </div>
         <div className="fg-row">
           <button type="button" disabled={ink < INK_PER_LENS} onClick={() => { setInk(n => n - INK_PER_LENS); setBank(b => b + 1); setMessage(`Traded ${INK_PER_LENS} Ink for a banked lens.`); }}>Trade {INK_PER_LENS} Ink → 1 lens ({ink} Ink)</button>
         </div>
