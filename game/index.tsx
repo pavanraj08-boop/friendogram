@@ -427,8 +427,8 @@ export default function Friendogram({ friendId, client, paused }: GameComponentP
           <p>{cstate.revealed ? "Revealed" : `${clock(cstate.seconds)} · ${cstate.mistakes} mistake${cstate.mistakes === 1 ? "" : "s"} · ${cstate.lenses} lens${cstate.lenses === 1 ? "" : "es"}`} · {starText(cstate.stars)}</p>
           <p className="fg-stamps">{stampLine(cstate.stamps)}</p>
           <div className="fg-row">
-            {nextUnsolved() && <button type="button" className="rf-frame-primary" onClick={() => { const n = nextUnsolved(); if (n) { setActiveId(n.id); setCursor(0); } setCelebrate(""); setMessage(""); }}>Next puzzle</button>}
-            <button type="button" onClick={() => setCelebrate("")}>Admire it</button>
+            {nextUnsolved() && <button type="button" className="rf-frame-primary" disabled={paused} onClick={() => { const n = nextUnsolved(); if (n) { setActiveId(n.id); setCursor(0); } setCelebrate(""); setMessage(""); }}>Next puzzle</button>}
+            <button type="button" disabled={paused} onClick={() => setCelebrate("")}>Admire it</button>
           </div>
         </div>
       </div>}

@@ -116,3 +116,20 @@
 .fg-vitals span:first-child{color:#c2185b;font-weight:bold}
 .fg-royalty{display:flex;flex-direction:column;gap:3px;border:2px solid #000;background:#ccff00;padding:8px 10px;margin:8px 0;font-size:12px}
 @media (max-aspect-ratio:1/1){.fg-vitals{display:none}}
+/* Phone / portrait audit fixes: give the board the space, keep the solve card whole. */
+@media (max-aspect-ratio: 1/1){
+  .fg-layout{grid-template-rows:minmax(0,1.35fr) auto}
+  .fg-perk,.fg-status:empty{display:none}
+  .fg-select{flex-direction:row;align-items:center;gap:4px;font-size:10px}
+  .fg-select select{flex:1;padding:3px;font-size:10px}
+  .fg-card{display:none}
+  .fg-side{gap:4px}
+  .fg-side header{flex-wrap:wrap}
+  .fg-burn{font-size:9px;margin:0}
+  .fg-actions{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+  .fg-actions button{padding:4px 2px;font-size:9px}
+  .fg-tools button{font-size:10px}
+  .fg-celebrate{grid-area:auto;position:absolute;inset:0 0 40px;z-index:5}
+  .fg-celebrate-card{max-width:92%;padding:8px}
+  .fg-celebrate-card .fg-row button{font-size:11px;padding:5px 8px}
+}

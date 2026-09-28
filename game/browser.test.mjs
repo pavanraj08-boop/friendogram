@@ -21,8 +21,9 @@ await testGame("./games/friendogram", {
       for (let c = 1; c <= 15; c++) await page.mouse.move(x0 + (x1 - x0) * c / 15, y);
       await page.mouse.up();
     }
-    await game.getByText(/Solved in/).waitFor({ timeout: 5000 });
+    await game.locator(".fg-celebrate-card").waitFor({ timeout: 5000 });
     await page.screenshot({ path: `./artifacts/friendogram-${width}-solved.png` });
+    await game.getByRole("button", { name: "Admire it" }).click();
     // Economy: buy, open, reveal, sell.
     await game.getByRole("button", { name: "Canvases" }).click();
     await game.getByRole("button", { name: /^Buy 1/ }).click();
@@ -32,7 +33,7 @@ await testGame("./games/friendogram", {
     await page.waitForTimeout(800);
     const confirm = page.getByRole("button", { name: /Confirm/ });
     if (await confirm.isVisible().catch(() => false)) await confirm.click();
-    await game.getByText(/sealed/).first().waitFor();
+    await game.getByRole("button", { name: /Reveal now/ }).waitFor();
     await game.getByRole("button", { name: /Reveal now/ }).click();
     await game.getByRole("heading", { name: /Smudge|Pebble|Egg|Crown|Relic|Star/ }).waitFor();
     await page.screenshot({ path: `./artifacts/friendogram-${width}-reward.png` });
