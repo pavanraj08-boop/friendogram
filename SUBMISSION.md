@@ -71,7 +71,7 @@ Expected reward **0.90 RF**. Each purchased or pending canvas reserves the 5 RF 
 
 - Typecheck, `friendsdk check` (valid; EV 0.9 RF; max 5 RF) and build: pass
 - Node tests: solver guarantee (all relics, 18 daily Friends, 200 random pictures) and reward invariants (1,280 cases, best return 99.0%): pass
-- Mock-wallet browser tests: 960 px and 360 px runs, 28 gameplay/economy checks, 15 feature checks, 13 iteration checks, 20 daily-system checks: all pass
+- Mock-wallet browser tests: SDK smoke test and full play-through at 960 px and 360 px, 28 gameplay/economy checks, 15 feature checks, 13 solver/stamp checks, 20 daily-system checks: all pass (111 game checks in total, plus the SDK's own 114 tests)
 - Real-wallet playthrough: _pending_ (the builder's free Friend is held by the Rare Friends custody contract, so it can't be selected in SDK previews yet)
 
 Credits: canonical Friend sprites via the FriendSDK sprite reader; SDK sound kit. Relic art is original.
